@@ -1,0 +1,13 @@
+[package]
+name = "zkevm_tester"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ethereum-types = "0.12"
+zk_evm = {git = "https://github.com/matter-labs/zk_evm.git"}
+zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", branch = "v1.1"}
+num-bigint = "0.4"
+num-traits = "0.2"
