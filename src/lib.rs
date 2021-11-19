@@ -18,6 +18,8 @@ pub mod runner;
 use zk_evm::opcodes::DecodedOpcode;
 use zk_evm::flags::Flags;
 
+mod tests;
+
 #[derive(Debug, Clone)]
 pub struct PartialVmState {
     pub skip_cycle: bool,

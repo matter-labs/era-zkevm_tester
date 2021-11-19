@@ -11,3 +11,4 @@ zk_evm = {git = "https://github.com/matter-labs/zk_evm.git"}
 zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", branch = "v1.1"}
 num-bigint = "0.4"
 num-traits = "0.2"
+hex = "*"

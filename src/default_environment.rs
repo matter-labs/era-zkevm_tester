@@ -4,6 +4,8 @@ use super::*;
 pub const ENTRY_POINT_PAGE: u32 = 4;
 pub const INITIAL_TIMESTAMP: u32 = 8;
 pub const INITIAL_MEMORY_COUNTER: u32 = 8;
+pub const CALLDATA_PAGE: u32 = 3;
+pub const INITIAL_BASE_PAGE: u32 = 5;
 pub const DEFAULT_CALLER: &'static str = "3000";
 pub const DEFAULT_CALLEE: &'static str = "5000";
 
@@ -54,9 +56,9 @@ pub fn create_vm_with_default_settings<
     let bootloader_context = CallStackEntry {
         contract_address: address_from_str_radix(DEFAULT_CALLEE, 10),
         msg_sender: address_from_str_radix(DEFAULT_CALLER, 10),
-        base_memory_page: MemoryPage(5),
+        base_memory_page: MemoryPage(INITIAL_BASE_PAGE),
         code_page: MemoryPage(ENTRY_POINT_PAGE),
-        calldata_page: MemoryPage(3),
+        calldata_page: MemoryPage(CALLDATA_PAGE),
         calldata_offset: MemoryOffset(0u16),
         calldata_len: MemoryOffset(0u16),
         returndata_page: MemoryPage(0),

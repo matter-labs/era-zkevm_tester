@@ -4,8 +4,18 @@ use zk_evm::testing::create_default_testing_tools;
 use zk_evm::testing::debug_tracer::{NoopTracer, ClosureBasedTracer};
 use zk_evm::testing::get_final_net_states;
 use super::PartialVmState;
+use zk_evm::testing::event_sink::EventMessage;
+use std::collections::HashMap;
 
-pub fn run_compiled_assembly(assembly: Vec<[u8; 32]>, num_cycles: usize) {
+pub fn run_compiled_assembly(assembly: Vec<[u8; 32]>, calldata: Vec<[u8; 32]>, num_cycles: usize)
+-> (
+    Vec<LogQuery>,
+    [HashMap<Address, HashMap<U256, U256>>; zk_evm::testing::NUM_SHARDS],
+    Vec<LogQuery>,
+    Vec<EventMessage>,
+    Vec<EventMessage>,
+    SimpleMemory,
+){
     let mut tools = create_default_testing_tools();
     let block_properties = create_default_block_properties();
     let mut vm = create_vm_with_default_settings(&mut tools, &block_properties);
@@ -16,8 +26,17 @@ pub fn run_compiled_assembly(assembly: Vec<[u8; 32]>, num_cycles: usize) {
         let word = U256::from_little_endian(&el);
         opcodes.push(word);
     }
+    let mut calldata_words = vec![];
+    for el in calldata.into_iter() {
+        let word = U256::from_big_endian(&el);
+        calldata_words.push(word);
+    }
+
+    vm.callstack.get_current_stack_mut().calldata_len = MemoryOffset(calldata_words.len() as u16);
+
     vm.memory.populate(vec![
-        (ENTRY_POINT_PAGE, opcodes)
+        (ENTRY_POINT_PAGE, opcodes),
+        (CALLDATA_PAGE, calldata_words),
     ]);
 
     let mut noop_tracer = NoopTracer::new();
@@ -54,7 +73,7 @@ pub fn run_compiled_assembly(assembly: Vec<[u8; 32]>, num_cycles: usize) {
     let final_state = final_state.unwrap();
 
     println!("Final summary: \n{:?}", final_state);
-    let (full_storage_access_history, storage_pre_shard, events_log_history, events, l1_messages) = get_final_net_states(tools);
+    let (full_storage_access_history, storage_per_shard, events_log_history, events, l1_messages, memory) = get_final_net_states(tools);
     
     println!("------------------------------------------------------");
     println!("Storage log access history:");
@@ -67,11 +86,26 @@ pub fn run_compiled_assembly(assembly: Vec<[u8; 32]>, num_cycles: usize) {
     println!("{:?}", events);
     println!("Net L1 messages:");
     println!("{:?}", l1_messages);
+
+    (full_storage_access_history, storage_per_shard, events_log_history, events, l1_messages, memory)
 }
 
-pub fn run_text_assembly(assembly: String, num_cycles: usize) {
+pub fn run_text_assembly(assembly: String, calldata: Vec<[u8; 32]>, num_cycles: usize) 
+-> (
+    Vec<LogQuery>,
+    [HashMap<Address, HashMap<U256, U256>>; zk_evm::testing::NUM_SHARDS],
+    Vec<LogQuery>,
+    Vec<EventMessage>,
+    Vec<EventMessage>,
+    SimpleMemory,
+){
     let assembly = Assembly::try_from(assembly).expect("must get a valid assembly as the input");
-    run_compiled_assembly(assembly.compile_to_bytecode(), num_cycles);
+    dbg!(&assembly.instructions);
+    let compiled = assembly.compile_to_bytecode(); 
+    for el in compiled.iter().take(16) {
+        println!("{}", hex::encode(el));
+    }
+    run_compiled_assembly(compiled, calldata, num_cycles)
 }
 
 #[test]
@@ -85,5 +119,14 @@ fn test_trivial() {
        .cell 777 ; 2 bytes
    "#;
 
-   run_text_assembly(asm_text.to_owned(), 2);
+   run_text_assembly(asm_text.to_owned(), vec![], 2);
+}
+
+pub(crate) fn pretty_print_memory_dump(content: &Vec<[u8; 32]>, range: std::ops::Range<u16>) {
+    println!("Memory dump:");
+    println!("-----------------------------------------");
+    for (cont, index) in content.into_iter().zip(range.into_iter()) {
+        println!("{:04x}: 0x{}", index, hex::encode(cont));
+    }
+    println!("-----------------------------------------");
 }
