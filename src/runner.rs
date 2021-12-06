@@ -1,5 +1,6 @@
 use super::*;
 use super::default_environment::*;
+use zk_evm::opcodes::PartiallyDecodedOpcode;
 use zk_evm::testing::create_default_testing_tools;
 use zk_evm::testing::debug_tracer::{NoopTracer, ClosureBasedTracer};
 use zk_evm::testing::get_final_net_states;
@@ -68,11 +69,30 @@ pub fn run_compiled_assembly(assembly: Vec<[u8; 32]>, calldata: Vec<[u8; 32]>, n
 
     vm.cycle(&mut debug_tracer);
     drop(debug_tracer);
+
+    let f = PartialVmState {
+        skip_cycle: false,
+        error_flags_collection: ErrorFlags::empty(),
+        final_masked_opcode: DecodedOpcode{inner: PartiallyDecodedOpcode::default()},
+        resolved_jump_condition: false,
+        registers: vm.registers.clone(),
+        flags: vm.flags.clone(),
+        timestamp: vm.timestamp,    
+        memory_page_counter: vm.memory_page_counter,
+        tx_number_in_block: vm.tx_number_in_block,
+        pending_port: vm.pending_port.clone(),
+        pending_cycles_left: vm.pending_cycles_left,
+        tx_origin: vm.tx_origin.clone(),
+        callstack: vm.callstack.clone(),
+    };
     drop(vm);
 
     let final_state = final_state.unwrap();
 
-    println!("Final summary: \n{:?}", final_state);
+    println!("Execution step summary summary: \n{:?}", final_state);
+
+    println!("State after execution step: \n{:?}", f);
+
     let (full_storage_access_history, storage_per_shard, events_log_history, events, l1_messages, memory) = get_final_net_states(tools);
     
     println!("------------------------------------------------------");
@@ -100,11 +120,11 @@ pub fn run_text_assembly(assembly: String, calldata: Vec<[u8; 32]>, num_cycles: 
     SimpleMemory,
 ){
     let assembly = Assembly::try_from(assembly).expect("must get a valid assembly as the input");
-    dbg!(&assembly.instructions);
+    // dbg!(&assembly.instructions);
     let compiled = assembly.compile_to_bytecode(); 
-    for el in compiled.iter().take(16) {
-        println!("{}", hex::encode(el));
-    }
+    // for el in compiled.iter().take(16) {
+    //     println!("{}", hex::encode(el));
+    // }
     run_compiled_assembly(compiled, calldata, num_cycles)
 }
 
