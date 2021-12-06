@@ -15,6 +15,8 @@ use zkevm_assembly::Assembly;
 pub mod default_environment;
 pub mod runner;
 
+pub mod trace;
+
 use zk_evm::opcodes::DecodedOpcode;
 use zk_evm::flags::Flags;
 

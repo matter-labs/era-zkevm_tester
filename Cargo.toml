@@ -12,3 +12,5 @@ zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", bra
 num-bigint = "0.4"
 num-traits = "0.2"
 hex = "*"
+serde = "1"
+serde_json = "1"
