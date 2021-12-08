@@ -1,4 +1,4 @@
-mod superior_tests;
+pub(crate) mod superior_tests;
 
 use crate::runner::*;
 use crate::default_environment::*;

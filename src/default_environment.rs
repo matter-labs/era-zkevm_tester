@@ -8,6 +8,7 @@ pub const CALLDATA_PAGE: u32 = 3;
 pub const INITIAL_BASE_PAGE: u32 = 5;
 pub const DEFAULT_CALLER: &'static str = "3000";
 pub const DEFAULT_CALLEE: &'static str = "5000";
+pub const DEFAULT_CALLEE_HEX: &'static str = "0x0000000000000000000000000000000000001388";
 
 pub fn address_from_str_radix(str: &str, radix: u32) -> Address {
     use num_traits::Num;

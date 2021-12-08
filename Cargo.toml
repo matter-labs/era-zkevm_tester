@@ -7,10 +7,10 @@ edition = "2021"
 
 [dependencies]
 ethereum-types = "0.12"
-zk_evm = {git = "https://github.com/matter-labs/zk_evm.git"}
-zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", branch = "v1.1"}
-# zk_evm = {path = "../zk_evm"}
-# zkevm-assembly = {path = "../zkEVM-assembly"}
+# zk_evm = {git = "https://github.com/matter-labs/zk_evm.git"}
+# zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", branch = "v1.1"}
+zk_evm = {path = "../zk_evm"}
+zkevm-assembly = {path = "../zkEVM-assembly"}
 num-bigint = "0.4"
 num-traits = "0.2"
 hex = "*"

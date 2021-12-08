@@ -128,10 +128,6 @@ pub fn run_text_assembly(assembly: String, calldata: Vec<[u8; 32]>, num_cycles: 
     run_compiled_assembly(compiled, calldata, num_cycles)
 }
 
-pub fn run_text_assembly_full_trace(assembly: String, calldata: Vec<[u8; 32]>, num_cycles: usize) -> {
-    
-}
-
 #[test]
 fn test_trivial() {
     let asm_text = r#"
