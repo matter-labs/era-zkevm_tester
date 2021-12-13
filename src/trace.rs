@@ -5,7 +5,7 @@ use std::io::Write;
 use std::slice::SliceIndex;
 
 use serde::{Deserialize, Serialize};
-use zk_evm::opcodes::REGISTERS_COUNT;
+use zk_evm::opcodes::{REGISTERS_COUNT, OpcodeType};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ContractSourceDebugInfo {
@@ -29,11 +29,20 @@ pub struct VmExecutionStep {
     returndata_page_index: u32,
     register_interactions: HashMap<usize, MemoryAccessType>,
     memory_interactions: Vec<MemoryInteraction>,
+    memory_snapshots: Vec<MemorySnapshot>,
     error: Option<String>
 }
 
-#[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct MemorySnapshot {
+    memory_type: MemoryType,
+    page: usize,
+    length: usize,
+    values: Vec<String>
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum MemoryType {
     heap,
     stack,
@@ -262,6 +271,7 @@ impl<
         debug_assert!(self.aux_info.is_none());
         debug_assert!(self.regs_before.is_none());
 
+
         // we need to know
         // - register reads
         // - memory reads
@@ -308,8 +318,30 @@ impl<
             returndata_page_index: returndata_page,
             register_interactions: HashMap::new(),
             memory_interactions: vec![],
+            memory_snapshots: vec![],
             error
         };
+
+        // special case for initial cycle
+        if self.cycle_number == 0 {
+            let mut initial_calldata = vec![];
+            let (end, of) = calldata_offset.overflowing_add(calldata_len);
+            if !of {
+                initial_calldata = main.memory.dump_page_content(calldata_page, calldata_offset..end);
+            } else {
+                unimplemented!()
+            }
+
+            let initial_calldata = initial_calldata.into_iter().map(|el| format!("0x{}", hex::encode(&el))).collect();
+            let snapshot = MemorySnapshot {
+                memory_type: MemoryType::calldata,
+                page: calldata_page as usize,
+                length: calldata_len as usize,
+                values: initial_calldata
+            };
+
+            trace_step.memory_snapshots.push(snapshot);
+        }
         
         if let Some(mem) = aux.src0_memory_location {
             let MemoryLocation { page, index } = mem;
@@ -475,6 +507,68 @@ impl<
         if aux.dst_1_reg != 0 {
             trace_step.register_interactions.insert(aux.dst_1_reg as usize, MemoryAccessType::Read);
         }
+
+        // special case for call or return
+        if aux.final_masked_opcode.opcode_type == OpcodeType::FarCall {
+            // we need new page numbers
+
+            let current_context = main.callstack.get_current_stack();
+            let calldata_page = current_context.calldata_page.0;
+            let calldata_offset = current_context.calldata_offset.0;
+            let calldata_len = current_context.calldata_len.0;
+
+            let mut initial_calldata = vec![];
+            let (end, of) = calldata_offset.overflowing_add(calldata_len);
+            if !of {
+                initial_calldata = main.memory.dump_page_content(calldata_page, calldata_offset..end);
+            } else {
+                unimplemented!()
+            }
+            let initial_calldata = initial_calldata.into_iter().map(|el| format!("0x{}", hex::encode(&el))).collect();
+
+            let snapshot = MemorySnapshot {
+                memory_type: MemoryType::calldata,
+                page: calldata_page as usize,
+                length: calldata_len as usize,
+                values: initial_calldata
+            };
+
+            trace_step.memory_snapshots.push(snapshot);
+        }
+
+        // special case for call or return
+        if aux.final_masked_opcode.opcode_type == OpcodeType::Ret {
+            // we need new page numbers
+
+            if !current_context.is_local_frame {
+                // only on far return
+
+                // get new context
+                let current_context = main.callstack.get_current_stack();
+                let returndata_page = current_context.returndata_page.0;
+                let returndata_offset = current_context.returndata_offset.0;
+                let returndata_len = current_context.returndata_len.0;
+
+                let mut initial_returndata = vec![];
+                let (end, of) = returndata_offset.overflowing_add(returndata_len);
+                if !of {
+                    initial_returndata = main.memory.dump_page_content(returndata_page, returndata_offset..end);
+                } else {
+                    unimplemented!()
+                }
+                let initial_returndata = initial_returndata.into_iter().map(|el| format!("0x{}", hex::encode(&el))).collect();
+
+                let snapshot = MemorySnapshot {
+                    memory_type: MemoryType::returndata,
+                    page: returndata_page as usize,
+                    length: returndata_len as usize,
+                    values: initial_returndata
+                };
+
+                trace_step.memory_snapshots.push(snapshot);
+            }
+        }
+       
 
         self.cycle_number += 1;
     }
