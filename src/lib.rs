@@ -1,4 +1,4 @@
-use ethereum_types::*;
+use zk_evm::zkevm_opcode_defs::ethereum_types::*;
 
 use zk_evm::vm_state::*;
 use zk_evm::aux_structures::*;
@@ -13,28 +13,15 @@ use zk_evm::witness_trace::DummyTracer;
 use zkevm_assembly::Assembly;
 
 pub mod default_environment;
-pub mod runner;
+// pub mod runner;
 
-pub mod trace;
+pub mod runners;
+
+// pub mod trace;
+
+use vlog;
 
 use zk_evm::opcodes::DecodedOpcode;
 use zk_evm::flags::Flags;
 
-mod tests;
-
-#[derive(Debug, Clone)]
-pub struct PartialVmState {
-    pub skip_cycle: bool,
-    pub error_flags_collection: ErrorFlags,
-    pub final_masked_opcode: DecodedOpcode,
-    pub resolved_jump_condition: bool,
-    pub registers: [U256; zk_evm::zkevm_opcode_defs::REGISTERS_COUNT],
-    pub flags: Flags,
-    pub timestamp: u32,    
-    pub memory_page_counter: u32,
-    pub tx_number_in_block: u16,
-    pub pending_port: LogPendingPort,
-    pub pending_cycles_left: Option<usize>,
-    pub tx_origin: Box<Address>, // large one
-    pub callstack: Callstack,
-}
+// mod tests;

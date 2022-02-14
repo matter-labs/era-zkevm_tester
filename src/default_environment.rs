@@ -55,30 +55,28 @@ pub fn create_vm_with_default_settings<
     );
 
     let bootloader_context = CallStackEntry {
-        contract_address: address_from_str_radix(DEFAULT_CALLEE, 10),
+        this_address: address_from_str_radix(DEFAULT_CALLEE, 10),
         msg_sender: address_from_str_radix(DEFAULT_CALLER, 10),
+        code_address: address_from_str_radix(DEFAULT_CALLER, 10),
         base_memory_page: MemoryPage(INITIAL_BASE_PAGE),
         code_page: MemoryPage(ENTRY_POINT_PAGE),
         calldata_page: MemoryPage(CALLDATA_PAGE),
-        calldata_offset: MemoryOffset(0u16),
-        calldata_len: MemoryOffset(0u16),
         returndata_page: MemoryPage(0),
-        returndata_offset: MemoryOffset(0),
-        returndata_len: MemoryOffset(0),
-        sp: MemoryIndex(0u16),
-        pc: MemoryIndex(0u16),
-        exception_handler_location: MemoryIndex(0u16),
+        sp: 0u16,
+        pc: 0u16,
+        exception_handler_location: 0u16,
         ergs_remaining: u32::MAX,
-        shard_id: 0u8,
+        this_shard_id: 0,
+        caller_shard_id: 0,
+        code_shard_id: 0,
         is_static: false,
         is_local_frame: false,
     };
 
     // we consider the tested code as a bootloader
-    vm.tx_origin = Box::new(address_from_str_radix(DEFAULT_CALLER, 10));
     vm.push_bootloader_context(bootloader_context);
-    vm.timestamp = INITIAL_TIMESTAMP;
-    vm.memory_page_counter = INITIAL_MEMORY_COUNTER;
+    vm.local_state.timestamp = INITIAL_TIMESTAMP;
+    vm.local_state.memory_page_counter = INITIAL_MEMORY_COUNTER;
 
     vm
 }

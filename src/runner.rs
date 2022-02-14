@@ -1,10 +1,8 @@
 use super::*;
 use super::default_environment::*;
-use zk_evm::opcodes::PartiallyDecodedOpcode;
 use zk_evm::testing::create_default_testing_tools;
 use zk_evm::testing::debug_tracer::{NoopTracer, ClosureBasedTracer};
 use zk_evm::testing::get_final_net_states;
-use super::PartialVmState;
 use zk_evm::testing::event_sink::EventMessage;
 use std::collections::HashMap;
 

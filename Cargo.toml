@@ -6,9 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ethereum-types = "0.12"
-zk_evm = {git = "https://github.com/matter-labs/zk_evm.git"}
-zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", branch = "v1.1"}
+zk_evm = {git = "https://github.com/matter-labs/zk_evm.git", branch = "v1.2"}
+zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", branch = "v1.2"}
 # zk_evm = {path = "../zk_evm"}
 # zkevm-assembly = {path = "../zkEVM-assembly"}
 num-bigint = "0.4"
@@ -16,3 +15,5 @@ num-traits = "0.2"
 hex = "*"
 serde = "1"
 serde_json = "1"
+vlog = "0.1"
+sha2 = "0.10"
