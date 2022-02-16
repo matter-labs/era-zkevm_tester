@@ -26,6 +26,7 @@ pub fn address_from_str_radix(str: &str, radix: u32) -> Address {
 
 pub fn create_default_block_properties() -> BlockProperties {
     BlockProperties {
+        default_aa_code_hash: U256::zero(),
         block_number: 1u64,
         block_timestamp: 123456789u64,
         coinbase: Address::zero(),
