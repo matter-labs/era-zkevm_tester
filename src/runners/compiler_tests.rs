@@ -44,6 +44,24 @@ pub struct VmExecutionContext {
     block_timestamp: u64,
 }
 
+impl VmExecutionContext {
+    pub fn new(
+        this_address: Address,
+        msg_sender: Address,
+        block_number: u64,
+        transaction_index: u32,
+        block_timestamp: u64,
+    ) -> Self {
+        Self {
+            this_address,
+            msg_sender,
+            block_number,
+            transaction_index,
+            block_timestamp,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct MemoryArea {
     pub words: Vec<U256>
