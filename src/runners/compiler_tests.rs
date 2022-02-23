@@ -219,7 +219,7 @@ pub fn create_vm<
     let mut reverse_lookup_for_assembly = HashMap::new();
 
     for (address, assembly) in contracts.iter() {
-        let bytecode = assembly.clone().compile_to_bytecode();
+        let bytecode = assembly.clone().compile_to_bytecode().expect("must compile an assembly");
         let bytecode_hash = hash_contract_code(&bytecode);
         let key = U256::from_big_endian(address.as_bytes());
         let value = U256::from_big_endian(bytecode_hash.as_bytes());
@@ -234,7 +234,7 @@ pub fn create_vm<
     }
 
     for assembly in known_contracts.into_iter() {
-        let bytecode = assembly.compile_to_bytecode();
+        let bytecode = assembly.compile_to_bytecode().expect("must compile an assembly");;
         let bytecode_hash = hash_contract_code(&bytecode);
         let bytecode_words = contract_bytecode_to_words(bytecode);
         let _ = factory_deps.insert(U256::from_big_endian(bytecode_hash.as_bytes()), bytecode_words);
@@ -314,12 +314,18 @@ pub async fn run_vm_multi_contracts(
 ) -> VmSnapshot {
     let initial_pc = match vm_launch_option {
         VmLaunchOption::Pc(pc) => pc,
-        VmLaunchOption::Label(label) => *contracts
+        VmLaunchOption::Label(label) => {
+            let offset = *contracts
             .get(&entry_address)
             .unwrap()
-            .labels
+            .function_labels
             .get(&label)
-            .unwrap(),
+            .unwrap();
+
+            assert!(offset <= u16::MAX as usize);
+
+            offset as u16
+        },
         VmLaunchOption::Default => 0,
     };
 
