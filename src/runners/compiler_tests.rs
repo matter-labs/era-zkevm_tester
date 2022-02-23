@@ -1,6 +1,7 @@
 use super::*;
 
 use zk_evm::opcodes::execution::far_call::*;
+use zk_evm::opcodes::execution::ret::*;
 use zk_evm::precompiles::DEPLOYER_PRECOMPILE_ADDRESS;
 use zk_evm::testing::simple_tracer::NoopTracer;
 use zkevm_assembly::Assembly;
@@ -73,6 +74,59 @@ impl MemoryArea {
             words: vec![]
         }
     }   
+
+    pub fn dump_be_bytes(&self, range: std::ops::Range<usize>) -> Vec<u8> {
+        if range.is_empty() {
+            return vec![];
+        }
+
+        let mut result = Vec::with_capacity(range.len());
+
+        let starting_word = range.start % 32;
+        let start_bytes = range.start / 32;
+        if start_bytes != 0 {
+            let el = self.words.get(starting_word).copied().unwrap_or(U256::zero());
+            let mut buffer = [0u8; 32];
+            el.to_big_endian(&mut buffer);
+            result.copy_from_slice(&buffer[(32-start_bytes)..]);
+        }
+
+        let end_cap = range.end % 32;
+        let end_word = range.end / 32;
+
+        // now just iterate aligned
+        let range_start = if start_bytes == 0 {
+            starting_word 
+        } else {
+            starting_word + 1
+        };
+
+        let range_end = if end_cap == 0 {
+            end_word
+        } else {
+            if end_word == 0 {
+                end_word
+            } else {
+                end_word - 1
+            }
+        };
+
+        for i in range_start..range_end {
+            let el = self.words.get(i).copied().unwrap_or(U256::zero());
+            let mut buffer = [0u8; 32];
+            el.to_big_endian(&mut buffer);
+            result.copy_from_slice(&buffer[..]);
+        }
+        
+        if end_cap != 0 {
+            let el = self.words.get(end_word).copied().unwrap_or(U256::zero());
+            let mut buffer = [0u8; 32];
+            el.to_big_endian(&mut buffer);
+            result.copy_from_slice(&buffer[..end_cap]);
+        }
+
+        result
+    }
 }
 
 pub fn hash_contract_code(code: &Vec<[u8; 32]>) -> H256 {
@@ -147,6 +201,7 @@ pub struct VmSnapshot {
     pub storage: HashMap<StorageKey, H256>,
     pub deployed_contracts: HashMap<Address, Assembly>,
     pub execution_result: VmExecutionResult,
+    pub returndata_bytes: Vec<u8>
 }
 
 #[derive(Debug)]
@@ -265,7 +320,7 @@ pub fn create_vm<
         vm.perform_dst1_update(value, (i+1) as u8);
     }
 
-    let bootloader_context = CallStackEntry {
+    let initial_context = CallStackEntry {
         this_address: context.this_address,
         msg_sender: context.msg_sender,
         code_address: context.this_address,
@@ -285,7 +340,7 @@ pub fn create_vm<
     };
 
     // we consider the tested code as a bootloader
-    vm.push_bootloader_context(bootloader_context);
+    vm.push_bootloader_context(initial_context);
     vm.local_state.timestamp = INITIAL_TIMESTAMP;
     vm.local_state.memory_page_counter = INITIAL_MEMORY_COUNTER;
     vm.local_state.tx_number_in_block = context.transaction_index as u16;
@@ -371,7 +426,12 @@ pub async fn run_vm_multi_contracts(
         vm.cycle(&mut NoopTracer);
     }
 
-    // TODO: dump returndata
+    let r1 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_OFFSET_REGISTER as usize];
+    let r2 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_LENGTH_REGISTER as usize];
+
+    let returndata_offset = r1.0[0] as usize;
+    let returndata_length = r2.0[0] as usize;
+    let returndata_page = vm.local_state.callstack.get_current_stack().returndata_page;
 
     let execution_result = match (vm.local_state.flags.overflow_or_less_than_flag, vm.local_state.callstack.get_current_stack().pc) {
         (false, 0) => {
@@ -431,6 +491,19 @@ pub async fn run_vm_multi_contracts(
         }
     }
 
+    // memory dump for returndata
+    let returndata_page_content = memory.inner.get(&returndata_page.0).cloned().unwrap_or(vec![]);
+    let returndata_mem = MemoryArea {
+        words: returndata_page_content
+    };
+
+    let calldata_page_content = memory.inner.get(&CALLDATA_PAGE).cloned().unwrap_or(vec![]);
+    let calldata_mem = MemoryArea {
+        words: calldata_page_content
+    };
+
+    let returndata_bytes = returndata_mem.dump_be_bytes(returndata_offset..(returndata_offset + returndata_length));
+
     VmSnapshot {
         registers: local_state.registers,
         flags: local_state.flags,
@@ -440,13 +513,14 @@ pub async fn run_vm_multi_contracts(
         previous_pc: local_state.previous_pc, 
         did_call_or_ret_recently: local_state.did_call_or_ret_recently, 
         tx_origin: local_state.tx_origin, 
-        calldata_area_dump: MemoryArea::empty(),
-        returndata_area_dump: MemoryArea::empty(),
+        calldata_area_dump: calldata_mem,
+        returndata_area_dump: returndata_mem,
         execution_has_ended,
         stack_dump: MemoryArea::empty(),
         heap_dump: MemoryArea::empty(),
         storage: result_storage,
         deployed_contracts,
         execution_result,
+        returndata_bytes
     }
 }
