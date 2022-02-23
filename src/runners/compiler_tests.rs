@@ -1,6 +1,6 @@
 use super::*;
 
-use zk_evm::opcodes::execution::far_call::CALL_IMPLICIT_CALLDATA_DATA_INFO_REG_IDX;
+use zk_evm::opcodes::execution::far_call::*;
 use zk_evm::precompiles::DEPLOYER_PRECOMPILE_ADDRESS;
 use zk_evm::testing::simple_tracer::NoopTracer;
 use zkevm_assembly::Assembly;
@@ -371,7 +371,7 @@ pub async fn run_vm_multi_contracts(
         vm.cycle(&mut NoopTracer);
     }
 
-    let r14 = vm.local_state.registers[CALL_IMPLICIT_CALLDATA_DATA_INFO_REG_IDX as usize];
+    // TODO: dump returndata
 
     let execution_result = match (vm.local_state.flags.overflow_or_less_than_flag, vm.local_state.callstack.get_current_stack().pc) {
         (false, 0) => {
