@@ -8,6 +8,7 @@ use zkevm_assembly::Assembly;
 use crate::{U256, Address, H256};
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::sync::atomic::AtomicBool;
 use zk_evm::testing::*;
 use crate::default_environment::*;
 use zk_evm::block_properties::*;
@@ -34,6 +35,7 @@ pub enum VmExecutionResult {
     Ok(Vec<u8>),
     Revert(Vec<u8>),
     Panic,
+    MostLikelyDidNotFinish(Address, u16)
 }
 
 #[derive(Debug, Default)]
@@ -88,7 +90,7 @@ impl MemoryArea {
             let el = self.words.get(starting_word).copied().unwrap_or(U256::zero());
             let mut buffer = [0u8; 32];
             el.to_big_endian(&mut buffer);
-            result.copy_from_slice(&buffer[(32-start_bytes)..]);
+            result.extend_from_slice(&buffer[(32-start_bytes)..]);
         }
 
         let end_cap = range.end % 32;
@@ -115,14 +117,14 @@ impl MemoryArea {
             let el = self.words.get(i).copied().unwrap_or(U256::zero());
             let mut buffer = [0u8; 32];
             el.to_big_endian(&mut buffer);
-            result.copy_from_slice(&buffer[..]);
+            result.extend_from_slice(&buffer[..]);
         }
         
         if end_cap != 0 {
             let el = self.words.get(end_word).copied().unwrap_or(U256::zero());
             let mut buffer = [0u8; 32];
             el.to_big_endian(&mut buffer);
-            result.copy_from_slice(&buffer[..end_cap]);
+            result.extend_from_slice(&buffer[..end_cap]);
         }
 
         result
@@ -215,7 +217,7 @@ pub struct RawInMemoryStorage {
 /// Used for testing the compiler with a single contract.
 ///
 #[allow(clippy::too_many_arguments)]
-pub async fn run_vm(
+pub fn run_vm(
     assembly: Assembly,
     calldata: Vec<u8>,
     storage: HashMap<StorageKey, H256>,
@@ -244,7 +246,6 @@ pub async fn run_vm(
         known_bytecodes,
         factory_deps,
     )
-    .await
 }
 
 
@@ -353,7 +354,7 @@ pub fn create_vm<
 /// Used for testing the compiler with multiple contracts.
 ///
 #[allow(clippy::too_many_arguments)]
-pub async fn run_vm_multi_contracts(
+pub fn run_vm_multi_contracts(
     contracts: HashMap<Address, Assembly>,
     calldata: Vec<u8>,
     storage: HashMap<StorageKey, H256>,
@@ -389,7 +390,16 @@ pub async fn run_vm_multi_contracts(
 
     // fill the calldata
     let aligned_calldata = calldata_to_aligned_data(&calldata);
-    tools.memory.populate(vec![(CALLDATA_PAGE, aligned_calldata)]);
+    // and initial memory page
+    let initial_assembly = contracts.get(&entry_address).cloned().unwrap();
+    let initial_bytecode = initial_assembly.clone().compile_to_bytecode().unwrap();
+    let initial_bytecode_as_memory = contract_bytecode_to_words(initial_bytecode);
+
+    tools.memory.populate(vec![
+        (CALLDATA_PAGE, aligned_calldata),
+        (ENTRY_POINT_PAGE, initial_bytecode_as_memory)
+        ]
+    );
 
     // fill the storage. Only rollup shard for now
     for (key, value) in storage.into_iter() {
@@ -421,9 +431,16 @@ pub async fn run_vm_multi_contracts(
         factory_deps,
         initial_pc
     );
+
+    let debug = get_debug();
     
     for _ in 0..cycles_limit {
-        vm.cycle(&mut NoopTracer);
+        if debug {
+            let mut tracer = super::debug_tracer::DebugTracerWithAssembly{assembly: &initial_assembly};
+            vm.cycle(&mut tracer);
+        } else {
+            vm.cycle(&mut NoopTracer);
+        }
     }
 
     let r1 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_OFFSET_REGISTER as usize];
@@ -432,6 +449,7 @@ pub async fn run_vm_multi_contracts(
     let returndata_offset = r1.0[0] as usize;
     let returndata_length = r2.0[0] as usize;
     let returndata_page = vm.local_state.callstack.get_current_stack().returndata_page;
+    let current_address = vm.local_state.callstack.get_current_stack().this_address;
 
     let execution_result = match (vm.local_state.flags.overflow_or_less_than_flag, vm.local_state.callstack.get_current_stack().pc) {
         (false, 0) => {
@@ -443,7 +461,9 @@ pub async fn run_vm_multi_contracts(
         (true, u16::MAX) => {
             VmExecutionResult::Panic
         },
-        _ => unreachable!()
+        (_, a) => {
+            VmExecutionResult::MostLikelyDidNotFinish(current_address, a)
+        }
     };
 
     let execution_has_ended = vm.execution_has_ended();
@@ -522,5 +542,95 @@ pub async fn run_vm_multi_contracts(
         deployed_contracts,
         execution_result,
         returndata_bytes
+    }
+}
+
+pub static USE_DEBUG: AtomicBool = AtomicBool::new(false);
+
+pub fn set_debug(value: bool) {
+    USE_DEBUG.store(value, std::sync::atomic::Ordering::SeqCst);
+}
+
+pub fn get_debug() -> bool {
+    USE_DEBUG.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+#[cfg(test)]
+mod test {
+    use core::time;
+
+    use super::*;
+
+
+    pub(crate) const TEST_ASSEMBLY_0: &'static str = r#"
+        .text
+        .file    "fib.ll"
+        .rodata.cst32
+        .p2align    5                               ; -- Begin function fn_fib
+    CPI0_0:
+        .cell -57896044618658097711785492504343953926634992332820282019728792003956564819968
+        .text
+        .globl    fn_fib
+    fn_fib:                                 ; @fn_fib
+    ; %bb.0:                                ; %fn_fib_entry
+        nop stack+=[6]
+        add    r1, r0, r2
+        add    @CPI0_0[0], r0, r1
+        add    0, r0, r4
+        add.gt    r1, r0, r4
+        add    0, 0, r3
+        add    0, r0, r5
+        add.lt    r1, r0, r5
+        add.eq    r5, r0, r4
+        sub!    r4, r3, r4
+        jump.ne    @.BB0_2
+    ; %bb.1:                                ; %fn_fib_entry.if
+        add    1, 0, r4
+        sub!    r2, r4, r4
+        and    r2, r1, r2
+        sub!    r2, r3, r3
+        sub!    r2, r1, r1
+        add    1, 0, r1
+        nop stack-=[6]
+        ret
+    .BB0_2:                                 ; %fn_fib_entry.endif
+        sub.s    1, r2, r1
+        call    @fn_fib
+        add    r1, r0, r3
+        sub.s    2, r2, r1
+        call    @fn_fib
+        add    r3, r1, r1
+        nop stack-=[6]
+        ret
+                                            ; -- End function
+        .note.GNU-stack
+        "#;
+
+
+    #[test]
+    fn test_fib() {
+        set_debug(true);
+
+        let assembly = Assembly::try_from(TEST_ASSEMBLY_0.to_owned()).unwrap();
+
+        let snapshot = run_vm(
+            assembly.clone(),
+            vec![],
+            HashMap::new(),
+            vec![U256::from_dec_str("5").unwrap()],
+            None,
+            VmLaunchOption::Default,
+            11,
+            u16::MAX as usize,
+            vec![assembly.clone()],
+            vec![],
+            HashMap::new(),
+        );
+
+        let VmSnapshot { registers, flags, timestamp, memory_page_counter, tx_number_in_block, previous_pc, did_call_or_ret_recently, tx_origin, calldata_area_dump, returndata_area_dump, execution_has_ended, stack_dump, heap_dump, storage, deployed_contracts, execution_result, returndata_bytes } = snapshot;
+        dbg!(execution_has_ended);
+        dbg!(execution_result);
+        dbg!(registers);
+        dbg!(timestamp);
     }
 }
