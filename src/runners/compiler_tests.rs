@@ -432,15 +432,10 @@ pub async fn run_vm_multi_contracts(
         initial_pc
     );
 
-    let debug = get_debug();
-    
+    let mut tracer = super::debug_tracer::DebugTracerWithAssembly{assembly: &initial_assembly};
+
     for _ in 0..cycles_limit {
-        if debug {
-            let mut tracer = super::debug_tracer::DebugTracerWithAssembly{assembly: &initial_assembly};
-            vm.cycle(&mut tracer);
-        } else {
-            vm.cycle(&mut NoopTracer);
-        }
+        vm.cycle(&mut tracer);
     }
 
     let r1 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_OFFSET_REGISTER as usize];

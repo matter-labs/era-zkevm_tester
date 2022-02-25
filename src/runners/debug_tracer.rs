@@ -1,6 +1,8 @@
 
-use zk_evm::abstractions::*;
+use zk_evm::{abstractions::*, testing::memory::SimpleMemory};
 use zkevm_assembly::Assembly;
+
+use crate::runners::compiler_tests::get_debug;
 
 #[derive(Debug)]
 pub struct DebugTracer;
@@ -12,16 +14,30 @@ impl Tracer for DebugTracer {
     const CALL_BEFORE_EXECUTION: bool = true;
     const CALL_AFTER_EXECUTION: bool = true;
 
-    fn before_decoding(&mut self, state: VmLocalStateData<'_>) {
+    type SupportedMemory = SimpleMemory;
+
+    fn before_decoding(&mut self, state: VmLocalStateData<'_>, memory: &Self::SupportedMemory) {
+        if !get_debug() {
+            return;
+        }
         dbg!(state);
     }
-    fn after_decoding(&mut self, state: VmLocalStateData<'_>, data: AfterDecodingData) {
+    fn after_decoding(&mut self, state: VmLocalStateData<'_>, data: AfterDecodingData, memory: &Self::SupportedMemory) {
+        if !get_debug() {
+            return;
+        }
         dbg!(data);
     }
-    fn before_execution(&mut self, state: VmLocalStateData<'_>, data: BeforeExecutionData) {
+    fn before_execution(&mut self, state: VmLocalStateData<'_>, data: BeforeExecutionData, memory: &Self::SupportedMemory) {
+        if !get_debug() {
+            return;
+        }
         dbg!(data);
     }
-    fn after_execution(&mut self, state: VmLocalStateData<'_>, data: AfterExecutionData) {
+    fn after_execution(&mut self, state: VmLocalStateData<'_>, data: AfterExecutionData, memory: &Self::SupportedMemory) {
+        if !get_debug() {
+            return;
+        }
         dbg!(data);
     }
 }
@@ -38,7 +54,12 @@ impl<'a> Tracer for DebugTracerWithAssembly<'a> {
     const CALL_BEFORE_EXECUTION: bool = true;
     const CALL_AFTER_EXECUTION: bool = true;
 
-    fn before_decoding(&mut self, state: VmLocalStateData<'_>) {
+    type SupportedMemory = SimpleMemory;
+
+    fn before_decoding(&mut self, state: VmLocalStateData<'_>, memory: &Self::SupportedMemory) {
+        if !get_debug() {
+            return;
+        }
         println!("New cycle -------------------------");
         dbg!(state);
         let pc = state.vm_local_state.callstack.get_current_stack().pc;
@@ -52,14 +73,23 @@ impl<'a> Tracer for DebugTracerWithAssembly<'a> {
             println!("Executing {}", l.trim());
         } 
     }
-    fn after_decoding(&mut self, state: VmLocalStateData<'_>, data: AfterDecodingData) {
+    fn after_decoding(&mut self, state: VmLocalStateData<'_>, data: AfterDecodingData, memory: &Self::SupportedMemory) {
+        if !get_debug() {
+            return;
+        }
         println!("Raw opcode LE: 0x{}", hex::encode(&data.raw_opcode_unmasked.to_le_bytes()));
         dbg!(data);
     }
-    fn before_execution(&mut self, state: VmLocalStateData<'_>, data: BeforeExecutionData) {
+    fn before_execution(&mut self, state: VmLocalStateData<'_>, data: BeforeExecutionData, memory: &Self::SupportedMemory) {
+        if !get_debug() {
+            return;
+        }
         dbg!(data);
     }
-    fn after_execution(&mut self, state: VmLocalStateData<'_>, data: AfterExecutionData) {
+    fn after_execution(&mut self, state: VmLocalStateData<'_>, data: AfterExecutionData, memory: &Self::SupportedMemory) {
+        if !get_debug() {
+            return;
+        }
         dbg!(data);
     }
 }

@@ -17,7 +17,7 @@ pub mod default_environment;
 
 pub mod runners;
 
-// pub mod trace;
+pub mod trace;
 
 use vlog;
 
