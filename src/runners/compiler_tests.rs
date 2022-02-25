@@ -217,7 +217,7 @@ pub struct RawInMemoryStorage {
 /// Used for testing the compiler with a single contract.
 ///
 #[allow(clippy::too_many_arguments)]
-pub fn run_vm(
+pub async fn run_vm(
     assembly: Assembly,
     calldata: Vec<u8>,
     storage: HashMap<StorageKey, H256>,
@@ -245,7 +245,7 @@ pub fn run_vm(
         known_contracts,
         known_bytecodes,
         factory_deps,
-    )
+    ).await
 }
 
 
@@ -354,7 +354,7 @@ pub fn create_vm<
 /// Used for testing the compiler with multiple contracts.
 ///
 #[allow(clippy::too_many_arguments)]
-pub fn run_vm_multi_contracts(
+pub async fn run_vm_multi_contracts(
     contracts: HashMap<Address, Assembly>,
     calldata: Vec<u8>,
     storage: HashMap<StorageKey, H256>,
@@ -609,11 +609,12 @@ mod test {
 
     #[test]
     fn test_fib() {
+        use futures::executor::block_on;
         set_debug(true);
 
         let assembly = Assembly::try_from(TEST_ASSEMBLY_0.to_owned()).unwrap();
 
-        let snapshot = run_vm(
+        let snapshot = block_on(run_vm(
             assembly.clone(),
             vec![],
             HashMap::new(),
@@ -625,7 +626,7 @@ mod test {
             vec![assembly.clone()],
             vec![],
             HashMap::new(),
-        );
+        ));
 
         let VmSnapshot { registers, flags, timestamp, memory_page_counter, tx_number_in_block, previous_pc, did_call_or_ret_recently, tx_origin, calldata_area_dump, returndata_area_dump, execution_has_ended, stack_dump, heap_dump, storage, deployed_contracts, execution_result, returndata_bytes } = snapshot;
         dbg!(execution_has_ended);
