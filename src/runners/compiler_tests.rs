@@ -230,6 +230,10 @@ pub async fn run_vm(
     known_bytecodes: Vec<Vec<[u8; 32]>>,
     factory_deps: HashMap<H256, Vec<[u8; 32]>>,
 ) -> VmSnapshot {
+    println!("Running single instance with calldata {} and initial registers: {:?}",
+        hex::encode(&calldata),
+        registers.iter().map(|el| format!("0x{:x}", el)).collect::<Vec<_>>(),
+    );
     let mut contracts: HashMap<Address, Assembly> = HashMap::new();
     contracts.insert(Address::default(), assembly);
     run_vm_multi_contracts(

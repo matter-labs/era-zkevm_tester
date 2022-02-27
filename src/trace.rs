@@ -511,41 +511,198 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
 
 #[cfg(test)]
 mod test {
-
-#[test]
-fn run_something() {
     use super::*;
 
-    let mut input = vec![0u8; 64];
-    input[31] = 1;
-    input[63] = 2;
-    
+    // const SIMPLE_ASSEMBLY: &'static str = r#"
+    // .rodata
+    // RET_CONST:
+    //     .cell 4294967296
+    // .text
+    // main:
+    //     add 0, r0, r5
+    //     add 32, r0, r6
+    //     uma.calldata_read r5, r0, r5
+    //     uma.calldata_read r6, r0, r6
+    //     add! r5, r6, r5
+    //     uma.heap_write r0, r5, r0
+    //     add @RET_CONST[0], r0, r1
+    //     ret.ok r1
+    // "#;
+
     const SIMPLE_ASSEMBLY: &'static str = r#"
-    .rodata
-    RET_CONST:
-        .cell 4294967296
-    .text
-    main:
-        add 0, r0, r5
-        add 32, r0, r6
-        uma.calldata_read r5, r0, r5
-        uma.calldata_read r6, r0, r6
-        add! r5, r6, r5
-        uma.heap_write r0, r5, r0
-        add @RET_CONST[0], r0, r1
-        ret.ok r1
+        .text
+        .file	"Test_26"
+        .rodata.cst32
+        .p2align	5
+    CPI0_0:
+        .cell 16777184
+    CPI0_1:
+        .cell 16777152
+    CPI0_2:
+        .cell 4294967297
+        .text
+        .globl	__entry
+    __entry:
+    .func_begin0:
+        nop	stack+=[7]
+        add	@CPI0_0[0], r0, r4
+        uma.heap_write	r4, r1, r0
+        add	@CPI0_1[0], r0, r1
+        uma.heap_write	r1, r2, r0
+        and	1, r3, r2
+        add	0, r0, r1
+        sub!	r2, r1, r2
+        jump.ne	@.BB0_3
+        jump	@.BB0_4
+    .BB0_3:
+        add	128, r0, r2
+        add	64, r0, r3
+        uma.heap_write	r3, r2, r0
+        add	@CPI0_0[0], r0, r3
+        uma.heap_write	r3, r2, r0
+        add	@CPI0_1[0], r0, r2
+        uma.heap_write	r2, r1, r0
+        jump	@.BB0_2
+    .BB0_4:
+    .tmp0:
+        near_call	r0, @__selector, @.BB0_1
+    .tmp1:
+    .BB0_2:
+        add	@CPI0_0[0], r0, r1
+        uma.heap_read	r1, r0, r1
+        add	@CPI0_2[0], r0, r2
+        mul	r1, r2, r1, r2
+        nop	stack-=[7]
+        ret
+    .BB0_1:
+    .tmp2:
+        add	96, r0, r1
+        uma.heap_read	r1, r0, r1
+        add	1, r0, r2
+        sub!	r1, r2, r1
+        jump.eq	@.BB0_2
+        jump	@.BB0_5
+    .BB0_5:
+        ret.panic r0
+    .func_end0:
+
+        .rodata.cst32
+        .p2align	5
+    CPI1_0:
+        .cell 16777152
+    CPI1_1:
+        .cell 16777184
+    CPI1_2:
+        .cell -26959946667150639794667015087019630673637144422540572481103610249216
+    CPI1_3:
+        .cell 28023726311554802966544231341579932116438770666993405431137050659635310100480
+    CPI1_4:
+        .cell -4
+    CPI1_5:
+        .cell 40953307615929575801107647705360601464619672688377251939886941387873771847680
+    CPI1_6:
+        .cell 57896044618658097711785492504343953926634992332820282019728792003956564819967
+        .text
+    __selector:
+    .func_begin1:
+        add	128, r0, r1
+        add	64, r0, r2
+        uma.heap_write	r2, r1, r0
+        add	@CPI1_0[0], r0, r2
+        uma.heap_read	r2, r0, r2
+        add	3, r0, r3
+        sub!	r2, r3, r3
+        jump.gt	@.BB1_3
+        jump	@.BB1_1
+    .BB1_3:
+        add	@CPI1_1[0], r0, r3
+        uma.heap_read	r3, r0, r3
+        uma.calldata_read	r3, r0, r3
+        and	@CPI1_2[0], r3, r3
+        add	@CPI1_3[0], r0, r4
+        sub!	r3, r4, r4
+        add	@CPI1_4[0], r2, r3
+        add	42, r0, r2
+        add	@CPI1_6[0], r0, r4
+        sub!	r3, r4, r3
+        jump.le	@.BB1_2
+        jump	@.BB1_1
+    .BB1_5:
+        add	@CPI1_4[0], r0, r4
+        add	@CPI1_5[0], r0, r5
+        sub!	r3, r5, r3
+        add	r2, r4, r3
+        add	99, r0, r2
+        add	@CPI1_6[0], r0, r4
+        sub!	r3, r4, r3
+    .BB1_2:
+        uma.heap_write	r1, r2, r0
+        add	@CPI1_1[0], r0, r2
+        uma.heap_write	r2, r1, r0
+        add	32, r0, r1
+        add	@CPI1_0[0], r0, r2
+        uma.heap_write	r2, r1, r0
+        ret
+    .BB1_1:
+        add	0, r0, r1
+        add	@CPI1_1[0], r0, r2
+        uma.heap_write	r2, r1, r0
+        add	@CPI1_0[0], r0, r2
+        uma.heap_write	r2, r1, r0
+        ret.panic r0
+    .func_end1:
+
+        .note.GNU-stack
     "#;
 
-    let trace = run_text_assembly_full_trace(
-        SIMPLE_ASSEMBLY.to_owned(),
-        input,
-        12
-    );
+    #[test]
+    fn run_something() {
+        use super::*;
+    
+        let mut input = vec![0u8; 64];
+        input[31] = 1;
+        input[63] = 2;
 
-    let _ = std::fs::remove_file("tmp.json");
-    let mut file = std::fs::File::create("tmp.json").unwrap();
-    let json = serde_json::to_string(&trace).unwrap();
+        let trace = run_text_assembly_full_trace(
+            SIMPLE_ASSEMBLY.to_owned(),
+            input,
+            12
+        );
 
-    file.write_all(json.as_bytes()).unwrap();
-}
+        let _ = std::fs::remove_file("tmp.json");
+        let mut file = std::fs::File::create("tmp.json").unwrap();
+        let json = serde_json::to_string(&trace).unwrap();
+
+        file.write_all(json.as_bytes()).unwrap();
+    }
+
+    #[test]
+    fn test_manually() {
+        use crate::runners::compiler_tests::*;
+
+        use futures::executor::block_on;
+        // set_debug(true);
+
+        let assembly = Assembly::try_from(SIMPLE_ASSEMBLY.to_owned()).unwrap();
+
+        let snapshot = block_on(run_vm(
+            assembly.clone(),
+            vec![],
+            HashMap::new(),
+            vec![],
+            None,
+            VmLaunchOption::Default,
+            1024,
+            u16::MAX as usize,
+            vec![assembly.clone()],
+            vec![],
+            HashMap::new(),
+        ));
+
+        let VmSnapshot { registers, flags, timestamp, memory_page_counter, tx_number_in_block, previous_pc, did_call_or_ret_recently, tx_origin, calldata_area_dump, returndata_area_dump, execution_has_ended, stack_dump, heap_dump, storage, deployed_contracts, execution_result, returndata_bytes } = snapshot;
+        dbg!(execution_has_ended);
+        dbg!(execution_result);
+        dbg!(registers);
+        dbg!(timestamp);
+    }
 }
