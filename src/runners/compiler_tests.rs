@@ -167,7 +167,12 @@ pub fn calldata_to_aligned_data(calldata: &Vec<u8>) -> Vec<U256> {
     result
 }
 
-pub(crate) fn dump_memory_page_using_abi(memory: &SimpleMemory, page: u32, r1: U256, r2: U256) -> Vec<u8> {
+pub(crate) fn dump_memory_page_using_abi(
+    memory: &SimpleMemory,
+    page: u32,
+    r1: U256,
+    r2: U256,
+) -> Vec<u8> {
     let offset = r1.0[0] as usize;
     let length = r2.0[0] as usize;
 
@@ -184,7 +189,7 @@ pub(crate) fn dump_memory_page_using_abi(memory: &SimpleMemory, page: u32, r1: U
     let mut drain = page_part.drain(..);
 
     if let Some(first) = drain.next() {
-        dump.extend_from_slice(&first[(32-(offset%32))..]);
+        dump.extend_from_slice(&first[(32 - (offset % 32))..]);
     }
 
     let num_remaining = drain.len();
@@ -269,14 +274,14 @@ pub async fn run_vm(
     known_bytecodes: Vec<Vec<[u8; 32]>>,
     factory_deps: HashMap<H256, Vec<[u8; 32]>>,
 ) -> VmSnapshot {
-    println!(
-        "Running single instance with calldata {} and initial registers: {:?}",
-        hex::encode(&calldata),
-        registers
-            .iter()
-            .map(|el| format!("0x{:x}", el))
-            .collect::<Vec<_>>(),
-    );
+    // println!(
+    //     "Running single instance with calldata {} and initial registers: {:?}",
+    //     hex::encode(&calldata),
+    //     registers
+    //         .iter()
+    //         .map(|el| format!("0x{:x}", el))
+    //         .collect::<Vec<_>>(),
+    // );
     let mut contracts: HashMap<Address, Assembly> = HashMap::new();
     contracts.insert(Address::default(), assembly);
     run_vm_multi_contracts(
@@ -420,15 +425,17 @@ pub fn create_vm<'a, const B: bool>(
     (vm, reverse_lookup_for_assembly)
 }
 
-pub(crate) fn vm_may_have_ended<'a, const B: bool>(vm: &VmState<
-    'a,
-    InMemoryStorage,
-    SimpleMemory,
-    InMemoryEventSink,
-    DefaultPrecompilesProcessor<B>,
-    SimpleDecommitter<B>,
-    DummyTracer,
->) -> Option<VmExecutionResult> {
+pub(crate) fn vm_may_have_ended<'a, const B: bool>(
+    vm: &VmState<
+        'a,
+        InMemoryStorage,
+        SimpleMemory,
+        InMemoryEventSink,
+        DefaultPrecompilesProcessor<B>,
+        SimpleDecommitter<B>,
+        DummyTracer,
+    >,
+) -> Option<VmExecutionResult> {
     let execution_has_ended = vm.execution_has_ended();
 
     let r1 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_OFFSET_REGISTER as usize];
@@ -445,32 +452,25 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool>(vm: &VmState<
         vm.local_state.callstack.get_current_stack().pc,
     ) {
         (true, 0) => {
-            let returndata = dump_memory_page_using_abi(
-                &vm.memory,
-                returndata_page.0,
-                r1,
-                r2
-            );
-            
+            let returndata = dump_memory_page_using_abi(&vm.memory, returndata_page.0, r1, r2);
+
             Some(VmExecutionResult::Ok(returndata))
-        },
+        }
         (false, _) => None,
         (true, u16::MAX) => {
             // check r1,r2,r3
             if vm.local_state.flags.overflow_or_less_than_flag {
                 Some(VmExecutionResult::Panic)
             } else {
-                let returndata = dump_memory_page_using_abi(
-                    &vm.memory,
-                    returndata_page.0,
-                    r1,
-                    r2
-                );
+                let returndata = dump_memory_page_using_abi(&vm.memory, returndata_page.0, r1, r2);
 
                 Some(VmExecutionResult::Revert(returndata))
             }
         }
-        (_, a) => Some(VmExecutionResult::MostLikelyDidNotFinish(current_address, a)),
+        (_, a) => Some(VmExecutionResult::MostLikelyDidNotFinish(
+            current_address,
+            a,
+        )),
     }
 }
 
@@ -492,14 +492,14 @@ pub async fn run_vm_multi_contracts(
     known_bytecodes: Vec<Vec<[u8; 32]>>,
     factory_deps: HashMap<H256, Vec<[u8; 32]>>,
 ) -> VmSnapshot {
-    println!(
-        "Running multi-instance with calldata {} and initial registers: {:?}",
-        hex::encode(&calldata),
-        registers
-            .iter()
-            .map(|el| format!("0x{:x}", el))
-            .collect::<Vec<_>>(),
-    );
+    // println!(
+    //     "Running multi-instance with calldata {} and initial registers: {:?}",
+    //     hex::encode(&calldata),
+    //     registers
+    //         .iter()
+    //         .map(|el| format!("0x{:x}", el))
+    //         .collect::<Vec<_>>(),
+    // );
 
     let initial_pc = match vm_launch_option {
         VmLaunchOption::Pc(pc) => pc,

@@ -750,9 +750,7 @@ mod test {
         set_debug(true);
 
         let assembly = Assembly::try_from(SIMPLE_ASSEMBLY.to_owned()).unwrap();
-        let calldata =
-            hex::decode("5a8ac02d")
-                .unwrap();
+        let calldata = hex::decode("5a8ac02d").unwrap();
         let snapshot = block_on(run_vm(
             assembly.clone(),
             calldata,

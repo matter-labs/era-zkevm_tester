@@ -126,6 +126,14 @@ impl<'a> Tracer for DebugTracerWithAssembly<'a> {
             return;
         }
         // dbg!(data);
-        println!("Registers: {:?}", state.vm_local_state.registers.iter().map(|el| format!("{:x}", el)).collect::<Vec<_>>());
+        println!(
+            "Registers: {:?}",
+            state
+                .vm_local_state
+                .registers
+                .iter()
+                .map(|el| format!("{:x}", el))
+                .collect::<Vec<_>>()
+        );
     }
 }
