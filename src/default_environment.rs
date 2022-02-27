@@ -1,11 +1,12 @@
-use zk_evm::testing::*;
 use super::*;
+use zk_evm::testing::*;
 
 pub const INITIAL_TIMESTAMP: u32 = 8;
 pub const INITIAL_MEMORY_COUNTER: u32 = 8;
 pub const CALLDATA_PAGE: u32 = 3;
 pub const INITIAL_BASE_PAGE: u32 = 4;
-pub const ENTRY_POINT_PAGE: u32 = CallStackEntry::code_page_candidate_from_base(MemoryPage(INITIAL_BASE_PAGE)).0;
+pub const ENTRY_POINT_PAGE: u32 =
+    CallStackEntry::code_page_candidate_from_base(MemoryPage(INITIAL_BASE_PAGE)).0;
 pub const DEFAULT_CALLER: &'static str = "3000";
 pub const DEFAULT_CALLEE: &'static str = "5000";
 pub const EMPTY_CONTEXT_HEX: &'static str = "0x0000000000000000000000000000000000000000";
@@ -39,21 +40,26 @@ pub fn create_default_block_properties() -> BlockProperties {
     }
 }
 
-pub fn create_vm_with_default_settings<
-    'a, const B: bool
->(
-    tools: &'a mut BasicTestingTools<B>, 
-    block_properties: &'a BlockProperties
-) -> VmState<'a, InMemoryStorage, SimpleMemory, InMemoryEventSink, DefaultPrecompilesProcessor<B>, SimpleDecommitter<B>, DummyTracer> {
-
+pub fn create_vm_with_default_settings<'a, const B: bool>(
+    tools: &'a mut BasicTestingTools<B>,
+    block_properties: &'a BlockProperties,
+) -> VmState<
+    'a,
+    InMemoryStorage,
+    SimpleMemory,
+    InMemoryEventSink,
+    DefaultPrecompilesProcessor<B>,
+    SimpleDecommitter<B>,
+    DummyTracer,
+> {
     let mut vm = VmState::empty_state(
-        &mut tools.storage, 
-        &mut tools.memory, 
-        &mut tools.event_sink, 
-        &mut tools.precompiles_processor, 
-        &mut tools.decommittment_processor, 
-        &mut tools.witness_tracer, 
-        block_properties
+        &mut tools.storage,
+        &mut tools.memory,
+        &mut tools.event_sink,
+        &mut tools.precompiles_processor,
+        &mut tools.decommittment_processor,
+        &mut tools.witness_tracer,
+        block_properties,
     );
 
     let bootloader_context = CallStackEntry {

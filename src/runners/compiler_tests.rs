@@ -1,27 +1,27 @@
 use super::*;
 
-use zk_evm::opcodes::execution::far_call::*;
-use zk_evm::opcodes::execution::ret::*;
-use zk_evm::precompiles::DEPLOYER_PRECOMPILE_ADDRESS;
-use zk_evm::testing::simple_tracer::NoopTracer;
-use zkevm_assembly::Assembly;
-use crate::{U256, Address, H256};
+use crate::default_environment::*;
+use crate::{Address, H256, U256};
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::atomic::AtomicBool;
-use zk_evm::testing::*;
-use crate::default_environment::*;
-use zk_evm::block_properties::*;
-use zk_evm::testing::storage::InMemoryStorage;
-use zk_evm::testing::memory::SimpleMemory;
-use zk_evm::testing::event_sink::InMemoryEventSink;
-use zk_evm::precompiles::DefaultPrecompilesProcessor;
-use zk_evm::testing::decommitter::SimpleDecommitter;
-use zk_evm::witness_trace::DummyTracer;
-use zk_evm::vm_state::*;
 use zk_evm::aux_structures::*;
+use zk_evm::block_properties::*;
+use zk_evm::opcodes::execution::far_call::*;
+use zk_evm::opcodes::execution::ret::*;
+use zk_evm::precompiles::DefaultPrecompilesProcessor;
+use zk_evm::precompiles::DEPLOYER_PRECOMPILE_ADDRESS;
+use zk_evm::testing::decommitter::SimpleDecommitter;
+use zk_evm::testing::event_sink::InMemoryEventSink;
+use zk_evm::testing::memory::SimpleMemory;
+use zk_evm::testing::simple_tracer::NoopTracer;
+use zk_evm::testing::storage::InMemoryStorage;
+use zk_evm::testing::*;
+use zk_evm::vm_state::*;
+use zk_evm::witness_trace::DummyTracer;
+use zkevm_assembly::Assembly;
 
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 
 #[derive(Debug)]
 pub enum VmLaunchOption {
@@ -35,7 +35,7 @@ pub enum VmExecutionResult {
     Ok(Vec<u8>),
     Revert(Vec<u8>),
     Panic,
-    MostLikelyDidNotFinish(Address, u16)
+    MostLikelyDidNotFinish(Address, u16),
 }
 
 #[derive(Debug, Default)]
@@ -67,15 +67,13 @@ impl VmExecutionContext {
 
 #[derive(Debug)]
 pub struct MemoryArea {
-    pub words: Vec<U256>
+    pub words: Vec<U256>,
 }
 
 impl MemoryArea {
     pub fn empty() -> Self {
-        Self {
-            words: vec![]
-        }
-    }   
+        Self { words: vec![] }
+    }
 
     pub fn dump_be_bytes(&self, range: std::ops::Range<usize>) -> Vec<u8> {
         if range.is_empty() {
@@ -87,10 +85,14 @@ impl MemoryArea {
         let starting_word = range.start % 32;
         let start_bytes = range.start / 32;
         if start_bytes != 0 {
-            let el = self.words.get(starting_word).copied().unwrap_or(U256::zero());
+            let el = self
+                .words
+                .get(starting_word)
+                .copied()
+                .unwrap_or(U256::zero());
             let mut buffer = [0u8; 32];
             el.to_big_endian(&mut buffer);
-            result.extend_from_slice(&buffer[(32-start_bytes)..]);
+            result.extend_from_slice(&buffer[(32 - start_bytes)..]);
         }
 
         let end_cap = range.end % 32;
@@ -98,7 +100,7 @@ impl MemoryArea {
 
         // now just iterate aligned
         let range_start = if start_bytes == 0 {
-            starting_word 
+            starting_word
         } else {
             starting_word + 1
         };
@@ -119,7 +121,7 @@ impl MemoryArea {
             el.to_big_endian(&mut buffer);
             result.extend_from_slice(&buffer[..]);
         }
-        
+
         if end_cap != 0 {
             let el = self.words.get(end_word).copied().unwrap_or(U256::zero());
             let mut buffer = [0u8; 32];
@@ -141,7 +143,9 @@ pub fn hash_contract_code(code: &Vec<[u8; 32]>) -> H256 {
 }
 
 pub fn contract_bytecode_to_words(code: Vec<[u8; 32]>) -> Vec<U256> {
-    code.into_iter().map(|el| U256::from_little_endian(&el)).collect()
+    code.into_iter()
+        .map(|el| U256::from_little_endian(&el))
+        .collect()
 }
 
 pub fn calldata_to_aligned_data(calldata: &Vec<u8>) -> Vec<U256> {
@@ -163,10 +167,45 @@ pub fn calldata_to_aligned_data(calldata: &Vec<u8>) -> Vec<U256> {
     result
 }
 
+pub(crate) fn dump_memory_page_using_abi(memory: &SimpleMemory, page: u32, r1: U256, r2: U256) -> Vec<u8> {
+    let offset = r1.0[0] as usize;
+    let length = r2.0[0] as usize;
+
+    let first_word = offset / 32;
+    let end_byte = offset + length;
+    let mut last_word = end_byte / 32;
+    if end_byte % 32 != 0 {
+        last_word += 1;
+    }
+
+    let mut page_part = memory.dump_page_content(page, (first_word as u32)..(last_word as u32));
+    let mut dump = Vec::with_capacity(length);
+
+    let mut drain = page_part.drain(..);
+
+    if let Some(first) = drain.next() {
+        dump.extend_from_slice(&first[(32-(offset%32))..]);
+    }
+
+    let num_remaining = drain.len();
+
+    for (i, el) in drain.enumerate() {
+        if i != num_remaining - 1 {
+            dump.extend_from_slice(&el);
+        } else {
+            dump.extend_from_slice(&el[..(end_byte % 32)]);
+        }
+    }
+
+    assert_eq!(dump.len(), length);
+
+    dump
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct StorageKey {
     pub address: Address,
-    pub key: U256
+    pub key: U256,
 }
 
 impl StorageKey {
@@ -189,12 +228,12 @@ impl StorageKey {
 pub struct VmSnapshot {
     pub registers: [U256; zk_evm::zkevm_opcode_defs::REGISTERS_COUNT],
     pub flags: zk_evm::flags::Flags,
-    pub timestamp: u32,    
+    pub timestamp: u32,
     pub memory_page_counter: u32,
     pub tx_number_in_block: u16,
     pub previous_pc: u16,
     pub did_call_or_ret_recently: bool,
-    pub tx_origin: Address, 
+    pub tx_origin: Address,
     pub calldata_area_dump: MemoryArea,
     pub returndata_area_dump: MemoryArea,
     pub execution_has_ended: bool,
@@ -203,7 +242,7 @@ pub struct VmSnapshot {
     pub storage: HashMap<StorageKey, H256>,
     pub deployed_contracts: HashMap<Address, Assembly>,
     pub execution_result: VmExecutionResult,
-    pub returndata_bytes: Vec<u8>
+    pub returndata_bytes: Vec<u8>,
 }
 
 #[derive(Debug)]
@@ -230,9 +269,13 @@ pub async fn run_vm(
     known_bytecodes: Vec<Vec<[u8; 32]>>,
     factory_deps: HashMap<H256, Vec<[u8; 32]>>,
 ) -> VmSnapshot {
-    println!("Running single instance with calldata {} and initial registers: {:?}",
+    println!(
+        "Running single instance with calldata {} and initial registers: {:?}",
         hex::encode(&calldata),
-        registers.iter().map(|el| format!("0x{:x}", el)).collect::<Vec<_>>(),
+        registers
+            .iter()
+            .map(|el| format!("0x{:x}", el))
+            .collect::<Vec<_>>(),
     );
     let mut contracts: HashMap<Address, Assembly> = HashMap::new();
     contracts.insert(Address::default(), assembly);
@@ -249,14 +292,12 @@ pub async fn run_vm(
         known_contracts,
         known_bytecodes,
         factory_deps,
-    ).await
+    )
+    .await
 }
 
-
-pub fn create_vm<
-    'a, const B: bool
->(
-    tools: &'a mut BasicTestingTools<B>, 
+pub fn create_vm<'a, const B: bool>(
+    tools: &'a mut BasicTestingTools<B>,
     block_properties: &'a BlockProperties,
     context: VmExecutionContext,
     registers: Vec<U256>,
@@ -265,25 +306,43 @@ pub fn create_vm<
     known_bytecodes: Vec<Vec<[u8; 32]>>,
     factory_deps: HashMap<H256, Vec<[u8; 32]>>,
     initial_pc: u16,
-) -> (VmState<'a, InMemoryStorage, SimpleMemory, InMemoryEventSink, DefaultPrecompilesProcessor<B>, SimpleDecommitter<B>, DummyTracer>,
-    HashMap<U256, Assembly>)
-{
+) -> (
+    VmState<
+        'a,
+        InMemoryStorage,
+        SimpleMemory,
+        InMemoryEventSink,
+        DefaultPrecompilesProcessor<B>,
+        SimpleDecommitter<B>,
+        DummyTracer,
+    >,
+    HashMap<U256, Assembly>,
+) {
     // fill the decommitter and storage slots with contract codes, etc
 
     // first deployed contracts. Those are stored under DEPLOYER_CONTRACT as raw address -> hash
     let mut storage_els = vec![];
-    let mut factory_deps: HashMap<U256, Vec<U256>> = factory_deps.into_iter().map(|(k, v)| {
-        (U256::from_big_endian(k.as_bytes()), contract_bytecode_to_words(v))
-    }).collect();
+    let mut factory_deps: HashMap<U256, Vec<U256>> = factory_deps
+        .into_iter()
+        .map(|(k, v)| {
+            (
+                U256::from_big_endian(k.as_bytes()),
+                contract_bytecode_to_words(v),
+            )
+        })
+        .collect();
 
     let mut reverse_lookup_for_assembly = HashMap::new();
 
     for (address, assembly) in contracts.iter() {
-        let bytecode = assembly.clone().compile_to_bytecode().expect("must compile an assembly");
+        let bytecode = assembly
+            .clone()
+            .compile_to_bytecode()
+            .expect("must compile an assembly");
         let bytecode_hash = hash_contract_code(&bytecode);
         let key = U256::from_big_endian(address.as_bytes());
         let value = U256::from_big_endian(bytecode_hash.as_bytes());
-    
+
         reverse_lookup_for_assembly.insert(value, assembly.clone());
 
         // add to decommitter
@@ -294,16 +353,24 @@ pub fn create_vm<
     }
 
     for assembly in known_contracts.into_iter() {
-        let bytecode = assembly.compile_to_bytecode().expect("must compile an assembly");;
+        let bytecode = assembly
+            .compile_to_bytecode()
+            .expect("must compile an assembly");
         let bytecode_hash = hash_contract_code(&bytecode);
         let bytecode_words = contract_bytecode_to_words(bytecode);
-        let _ = factory_deps.insert(U256::from_big_endian(bytecode_hash.as_bytes()), bytecode_words);
+        let _ = factory_deps.insert(
+            U256::from_big_endian(bytecode_hash.as_bytes()),
+            bytecode_words,
+        );
     }
 
     for bytecode in known_bytecodes.into_iter() {
         let bytecode_hash = hash_contract_code(&bytecode);
         let bytecode_words = contract_bytecode_to_words(bytecode);
-        let _ = factory_deps.insert(U256::from_big_endian(bytecode_hash.as_bytes()), bytecode_words);
+        let _ = factory_deps.insert(
+            U256::from_big_endian(bytecode_hash.as_bytes()),
+            bytecode_words,
+        );
     }
 
     let decommitter_els: Vec<_> = factory_deps.into_iter().into_iter().collect();
@@ -312,17 +379,17 @@ pub fn create_vm<
     tools.storage.populate(storage_els);
 
     let mut vm = VmState::empty_state(
-        &mut tools.storage, 
-        &mut tools.memory, 
-        &mut tools.event_sink, 
-        &mut tools.precompiles_processor, 
-        &mut tools.decommittment_processor, 
-        &mut tools.witness_tracer, 
-        block_properties
+        &mut tools.storage,
+        &mut tools.memory,
+        &mut tools.event_sink,
+        &mut tools.precompiles_processor,
+        &mut tools.decommittment_processor,
+        &mut tools.witness_tracer,
+        block_properties,
     );
 
     for (i, value) in registers.into_iter().enumerate() {
-        vm.perform_dst1_update(value, (i+1) as u8);
+        vm.perform_dst1_update(value, (i + 1) as u8);
     }
 
     let initial_context = CallStackEntry {
@@ -350,8 +417,61 @@ pub fn create_vm<
     vm.local_state.memory_page_counter = INITIAL_MEMORY_COUNTER;
     vm.local_state.tx_number_in_block = context.transaction_index as u16;
 
-
     (vm, reverse_lookup_for_assembly)
+}
+
+pub(crate) fn vm_may_have_ended<'a, const B: bool>(vm: &VmState<
+    'a,
+    InMemoryStorage,
+    SimpleMemory,
+    InMemoryEventSink,
+    DefaultPrecompilesProcessor<B>,
+    SimpleDecommitter<B>,
+    DummyTracer,
+>) -> Option<VmExecutionResult> {
+    let execution_has_ended = vm.execution_has_ended();
+
+    let r1 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_OFFSET_REGISTER as usize];
+    let r2 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_LENGTH_REGISTER as usize];
+    // let r3 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_LENGTH_REGISTER as usize];
+
+    // let returndata_offset = r1.0[0] as usize;
+    // let returndata_length = r2.0[0] as usize;
+    let returndata_page = vm.local_state.callstack.get_current_stack().returndata_page;
+    let current_address = vm.local_state.callstack.get_current_stack().this_address;
+
+    match (
+        execution_has_ended,
+        vm.local_state.callstack.get_current_stack().pc,
+    ) {
+        (true, 0) => {
+            let returndata = dump_memory_page_using_abi(
+                &vm.memory,
+                returndata_page.0,
+                r1,
+                r2
+            );
+            
+            Some(VmExecutionResult::Ok(returndata))
+        },
+        (false, _) => None,
+        (true, u16::MAX) => {
+            // check r1,r2,r3
+            if vm.local_state.flags.overflow_or_less_than_flag {
+                Some(VmExecutionResult::Panic)
+            } else {
+                let returndata = dump_memory_page_using_abi(
+                    &vm.memory,
+                    returndata_page.0,
+                    r1,
+                    r2
+                );
+
+                Some(VmExecutionResult::Revert(returndata))
+            }
+        }
+        (_, a) => Some(VmExecutionResult::MostLikelyDidNotFinish(current_address, a)),
+    }
 }
 
 ///
@@ -372,25 +492,36 @@ pub async fn run_vm_multi_contracts(
     known_bytecodes: Vec<Vec<[u8; 32]>>,
     factory_deps: HashMap<H256, Vec<[u8; 32]>>,
 ) -> VmSnapshot {
+    println!(
+        "Running multi-instance with calldata {} and initial registers: {:?}",
+        hex::encode(&calldata),
+        registers
+            .iter()
+            .map(|el| format!("0x{:x}", el))
+            .collect::<Vec<_>>(),
+    );
+
     let initial_pc = match vm_launch_option {
         VmLaunchOption::Pc(pc) => pc,
         VmLaunchOption::Label(label) => {
             let offset = *contracts
-            .get(&entry_address)
-            .unwrap()
-            .function_labels
-            .get(&label)
-            .unwrap();
+                .get(&entry_address)
+                .unwrap()
+                .function_labels
+                .get(&label)
+                .unwrap();
 
             assert!(offset <= u16::MAX as usize);
 
             offset as u16
-        },
+        }
         VmLaunchOption::Default => 0,
     };
 
     let mut tools = create_default_testing_tools();
     let mut block_properties = create_default_block_properties();
+
+    let calldata_length = calldata.len();
 
     // fill the calldata
     let aligned_calldata = calldata_to_aligned_data(&calldata);
@@ -401,9 +532,8 @@ pub async fn run_vm_multi_contracts(
 
     tools.memory.populate(vec![
         (CALLDATA_PAGE, aligned_calldata),
-        (ENTRY_POINT_PAGE, initial_bytecode_as_memory)
-        ]
-    );
+        (ENTRY_POINT_PAGE, initial_bytecode_as_memory),
+    ]);
 
     // fill the storage. Only rollup shard for now
     for (key, value) in storage.into_iter() {
@@ -415,7 +545,7 @@ pub async fn run_vm_multi_contracts(
     let context = context.unwrap_or_else(|| {
         let mut ctx = VmExecutionContext::default();
         ctx.this_address = entry_address;
-        
+
         ctx
     });
 
@@ -433,42 +563,53 @@ pub async fn run_vm_multi_contracts(
         known_contracts,
         known_bytecodes,
         factory_deps,
-        initial_pc
+        initial_pc,
     );
 
-    let mut tracer = super::debug_tracer::DebugTracerWithAssembly{assembly: &initial_assembly};
+    // we need to properly set calldata abi
+    let r1 = U256::zero();
+
+    let mut r2 = U256::zero();
+    r2.0[0] = calldata_length as u64;
+
+    let r3 = U256::zero();
+    let r4 = U256::zero();
+
+    vm.local_state.registers[0] = r1;
+    vm.local_state.registers[1] = r2;
+    vm.local_state.registers[2] = r3;
+    vm.local_state.registers[3] = r4;
+
+    let mut tracer = super::debug_tracer::DebugTracerWithAssembly {
+        assembly: &initial_assembly,
+    };
+
+    let mut result = None;
 
     for _ in 0..cycles_limit {
         vm.cycle(&mut tracer);
+
+        // early return
+        if let Some(end_result) = vm_may_have_ended(&vm) {
+            result = Some(end_result);
+            break;
+        }
     }
 
-    let r1 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_OFFSET_REGISTER as usize];
-    let r2 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_LENGTH_REGISTER as usize];
-
-    let returndata_offset = r1.0[0] as usize;
-    let returndata_length = r2.0[0] as usize;
     let returndata_page = vm.local_state.callstack.get_current_stack().returndata_page;
-    let current_address = vm.local_state.callstack.get_current_stack().this_address;
 
-    let execution_result = match (vm.local_state.flags.overflow_or_less_than_flag, vm.local_state.callstack.get_current_stack().pc) {
-        (false, 0) => {
-            VmExecutionResult::Ok(vec![])
-        },
-        (false, u16::MAX) => {
-            VmExecutionResult::Revert(vec![])
-        },
-        (true, u16::MAX) => {
-            VmExecutionResult::Panic
-        },
-        (_, a) => {
-            VmExecutionResult::MostLikelyDidNotFinish(current_address, a)
-        }
+    let execution_result = if let Some(result) = result {
+        result
+    } else {
+        let current_address = vm.local_state.callstack.get_current_stack().this_address;
+        let pc = vm.local_state.callstack.get_current_stack().pc;
+        VmExecutionResult::MostLikelyDidNotFinish(current_address, pc)
     };
 
     let execution_has_ended = vm.execution_has_ended();
 
-    let VmState { 
-        local_state, 
+    let VmState {
+        local_state,
         block_properties: _,
         ..
     } = vm;
@@ -490,10 +631,7 @@ pub async fn run_vm_multi_contracts(
 
     for (address, inner) in storage.into_iter() {
         for (key, value) in inner.into_iter() {
-            let storage_key = StorageKey {
-                address,
-                key
-            };
+            let storage_key = StorageKey { address, key };
             let mut buffer = [0u8; 32];
             value.to_big_endian(&mut buffer);
             let value_h256 = H256::from_slice(&buffer);
@@ -511,27 +649,36 @@ pub async fn run_vm_multi_contracts(
     }
 
     // memory dump for returndata
-    let returndata_page_content = memory.inner.get(&returndata_page.0).cloned().unwrap_or(vec![]);
+    let returndata_page_content = memory
+        .inner
+        .get(&returndata_page.0)
+        .cloned()
+        .unwrap_or(vec![]);
     let returndata_mem = MemoryArea {
-        words: returndata_page_content
+        words: returndata_page_content,
     };
 
     let calldata_page_content = memory.inner.get(&CALLDATA_PAGE).cloned().unwrap_or(vec![]);
     let calldata_mem = MemoryArea {
-        words: calldata_page_content
+        words: calldata_page_content,
     };
 
-    let returndata_bytes = returndata_mem.dump_be_bytes(returndata_offset..(returndata_offset + returndata_length));
+    let returndata_bytes = match &execution_result {
+        VmExecutionResult::Ok(ref res) => res.clone(),
+        VmExecutionResult::Revert(ref res) => res.clone(),
+        VmExecutionResult::Panic => vec![],
+        VmExecutionResult::MostLikelyDidNotFinish(..) => vec![],
+    };
 
     VmSnapshot {
         registers: local_state.registers,
         flags: local_state.flags,
-        timestamp: local_state.timestamp,    
-        memory_page_counter: local_state.memory_page_counter,    
-        tx_number_in_block: local_state.tx_number_in_block,    
-        previous_pc: local_state.previous_pc, 
-        did_call_or_ret_recently: local_state.did_call_or_ret_recently, 
-        tx_origin: local_state.tx_origin, 
+        timestamp: local_state.timestamp,
+        memory_page_counter: local_state.memory_page_counter,
+        tx_number_in_block: local_state.tx_number_in_block,
+        previous_pc: local_state.previous_pc,
+        did_call_or_ret_recently: local_state.did_call_or_ret_recently,
+        tx_origin: local_state.tx_origin,
         calldata_area_dump: calldata_mem,
         returndata_area_dump: returndata_mem,
         execution_has_ended,
@@ -540,7 +687,7 @@ pub async fn run_vm_multi_contracts(
         storage: result_storage,
         deployed_contracts,
         execution_result,
-        returndata_bytes
+        returndata_bytes,
     }
 }
 
@@ -559,7 +706,6 @@ mod test {
     use core::time;
 
     use super::*;
-
 
     pub(crate) const TEST_ASSEMBLY_0: &'static str = r#"
         .text
@@ -605,7 +751,6 @@ mod test {
         .note.GNU-stack
         "#;
 
-
     #[test]
     fn test_fib() {
         use futures::executor::block_on;
@@ -627,7 +772,25 @@ mod test {
             HashMap::new(),
         ));
 
-        let VmSnapshot { registers, flags, timestamp, memory_page_counter, tx_number_in_block, previous_pc, did_call_or_ret_recently, tx_origin, calldata_area_dump, returndata_area_dump, execution_has_ended, stack_dump, heap_dump, storage, deployed_contracts, execution_result, returndata_bytes } = snapshot;
+        let VmSnapshot {
+            registers,
+            flags,
+            timestamp,
+            memory_page_counter,
+            tx_number_in_block,
+            previous_pc,
+            did_call_or_ret_recently,
+            tx_origin,
+            calldata_area_dump,
+            returndata_area_dump,
+            execution_has_ended,
+            stack_dump,
+            heap_dump,
+            storage,
+            deployed_contracts,
+            execution_result,
+            returndata_bytes,
+        } = snapshot;
         dbg!(execution_has_ended);
         dbg!(execution_result);
         dbg!(registers);
