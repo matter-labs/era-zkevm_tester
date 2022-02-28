@@ -714,7 +714,7 @@ mod test {
 
     use super::*;
 
-    pub(crate) const TEST_ASSEMBLY_0: &'static str = r#"
+    pub(crate) const FIB_ASSEMBLY: &'static str = r#"
         .text
         .file    "fib.ll"
         .rodata.cst32
@@ -763,7 +763,7 @@ mod test {
         use futures::executor::block_on;
         set_debug(true);
 
-        let assembly = Assembly::try_from(TEST_ASSEMBLY_0.to_owned()).unwrap();
+        let assembly = Assembly::try_from(FIB_ASSEMBLY.to_owned()).unwrap();
 
         let snapshot = block_on(run_vm(
             assembly.clone(),
