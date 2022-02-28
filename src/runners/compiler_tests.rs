@@ -23,11 +23,13 @@ use zkevm_assembly::Assembly;
 
 use sha2::{Digest, Sha256};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Hash)]
 pub enum VmLaunchOption {
     Default,
     Pc(u16),
     Label(String),
+    Call,
+    Constructor,
 }
 
 #[derive(Debug)]
@@ -501,21 +503,21 @@ pub async fn run_vm_multi_contracts(
     //         .collect::<Vec<_>>(),
     // );
 
-    let initial_pc = match vm_launch_option {
-        VmLaunchOption::Pc(pc) => pc,
+    let (initial_pc, set_far_call_props) = match &vm_launch_option {
+        VmLaunchOption::Pc(pc) => (*pc, false),
         VmLaunchOption::Label(label) => {
             let offset = *contracts
                 .get(&entry_address)
                 .unwrap()
                 .function_labels
-                .get(&label)
+                .get(label)
                 .unwrap();
 
             assert!(offset <= u16::MAX as usize);
 
-            offset as u16
+            (offset as u16, false)
         }
-        VmLaunchOption::Default => 0,
+        VmLaunchOption::Default | VmLaunchOption::Call | VmLaunchOption::Constructor => (0, true),
     };
 
     let mut tools = create_default_testing_tools();
@@ -566,19 +568,24 @@ pub async fn run_vm_multi_contracts(
         initial_pc,
     );
 
-    // we need to properly set calldata abi
-    let r1 = U256::zero();
+    if set_far_call_props {
+        // we need to properly set calldata abi
+        let r1 = U256::zero();
 
-    let mut r2 = U256::zero();
-    r2.0[0] = calldata_length as u64;
+        let mut r2 = U256::zero();
+        r2.0[0] = calldata_length as u64;
 
-    let r3 = U256::zero();
-    let r4 = U256::zero();
+        vm.local_state.registers[0] = r1;
+        vm.local_state.registers[1] = r2;
+        if vm_launch_option == VmLaunchOption::Constructor {
+            vm.local_state.registers[2] = U256::from_dec_str("1").unwrap();
+        } else {
+            vm.local_state.registers[2] = U256::zero();
+        }
 
-    vm.local_state.registers[0] = r1;
-    vm.local_state.registers[1] = r2;
-    vm.local_state.registers[2] = r3;
-    vm.local_state.registers[3] = r4;
+        let r4 = U256::zero();
+        vm.local_state.registers[3] = r4;
+    }
 
     let mut tracer = super::debug_tracer::DebugTracerWithAssembly {
         assembly: &initial_assembly,
