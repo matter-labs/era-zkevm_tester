@@ -191,7 +191,8 @@ pub(crate) fn dump_memory_page_using_abi(
     let mut drain = page_part.drain(..);
 
     if let Some(first) = drain.next() {
-        dump.extend_from_slice(&first[(32 - (offset % 32))..]);
+        let offset_bytes = offset % 32;
+        dump.extend_from_slice(&first[offset_bytes..]);
     }
 
     let num_remaining = drain.len();
@@ -200,7 +201,8 @@ pub(crate) fn dump_memory_page_using_abi(
         if i != num_remaining - 1 {
             dump.extend_from_slice(&el);
         } else {
-            dump.extend_from_slice(&el[..(end_byte % 32)]);
+            let bytes_to_take = 32 - (end_byte % 32);
+            dump.extend_from_slice(&el[..bytes_to_take]);
         }
     }
 

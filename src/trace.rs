@@ -643,7 +643,7 @@ mod test {
         add	@CPI0_2[0], r0, r2
         mul	r1, r2, r1, r2
         nop	stack-=[7]
-        ret
+        ret.ok r1
     .BB0_1:
     .tmp2:
         add	96, r0, r1
