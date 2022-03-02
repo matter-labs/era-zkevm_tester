@@ -7,12 +7,12 @@ use std::hash::Hash;
 use std::sync::atomic::AtomicBool;
 use zk_evm::aux_structures::*;
 use zk_evm::block_properties::*;
-use zk_evm::opcodes::execution::far_call::*;
+use crate::runners::events::SolidityLikeEvent;
 use zk_evm::opcodes::execution::ret::*;
-use zk_evm::precompiles::DefaultPrecompilesProcessor;
-use zk_evm::precompiles::DEPLOYER_PRECOMPILE_ADDRESS;
+use zk_evm::precompiles::{DefaultPrecompilesProcessor, KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS};
+use zk_evm::precompiles::DEPLOYER_SYSTEM_CONTRACT_ADDRESS;
 use zk_evm::testing::decommitter::SimpleDecommitter;
-use zk_evm::testing::event_sink::InMemoryEventSink;
+use zk_evm::testing::event_sink::{InMemoryEventSink, EventMessage};
 use zk_evm::testing::memory::SimpleMemory;
 use zk_evm::testing::simple_tracer::NoopTracer;
 use zk_evm::testing::storage::InMemoryStorage;
@@ -252,6 +252,9 @@ pub struct VmSnapshot {
     pub deployed_contracts: HashMap<Address, Assembly>,
     pub execution_result: VmExecutionResult,
     pub returndata_bytes: Vec<u8>,
+    pub raw_events: Vec<EventMessage>,
+    pub to_l1_messages: Vec<EventMessage>,
+    pub events: Vec<SolidityLikeEvent>,
 }
 
 #[derive(Debug)]
@@ -349,7 +352,10 @@ pub fn create_vm<'a, const B: bool>(
             .compile_to_bytecode()
             .expect("must compile an assembly");
         let bytecode_hash = hash_contract_code(&bytecode);
-        let key = U256::from_big_endian(address.as_bytes());
+        // let mut buffer = [0u8; 32];
+        // buffer[12..].copy_from_slice(&address.as_bytes());
+        // let key = U256::from_big_endian(&buffer);
+        let key = U256::from_big_endian(&address.as_bytes());
         let value = U256::from_big_endian(bytecode_hash.as_bytes());
 
         reverse_lookup_for_assembly.insert(value, assembly.clone());
@@ -358,7 +364,10 @@ pub fn create_vm<'a, const B: bool>(
         let bytecode_words = contract_bytecode_to_words(bytecode);
         let _existing = factory_deps.insert(value, bytecode_words);
 
-        storage_els.push((0, *address, key, value));
+        // we write into DEPLOYER that for key == address we have bytecode == bytecode hash
+        storage_els.push((0, *DEPLOYER_SYSTEM_CONTRACT_ADDRESS, key, value));
+        // we write into FACTORY that for key == bytecode hash we have marker to know it
+        storage_els.push((0, *KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS, value, U256::from_dec_str("1").unwrap()));
     }
 
     for assembly in known_contracts.into_iter() {
@@ -629,11 +638,19 @@ pub async fn run_vm_multi_contracts(
     let BasicTestingTools {
         storage,
         memory,
-        event_sink: _,
+        event_sink,
         precompiles_processor: _,
         decommittment_processor: _,
         witness_tracer: _,
     } = tools;
+
+    let (_full_history, raw_events, l1_messages) = event_sink.flatten();
+    use crate::runners::events::merge_events;
+    let events = merge_events(raw_events.clone());
+
+    let (history, per_slot) = storage.clone().flatten_and_net_history();
+    dbg!(history);
+    dbg!(per_slot);
 
     let storage = storage.inner;
     let storage = storage.into_iter().next().unwrap();
@@ -646,9 +663,9 @@ pub async fn run_vm_multi_contracts(
             let value_h256 = H256::from_slice(&buffer);
             result_storage.insert(storage_key, value_h256);
 
-            if address == *DEPLOYER_PRECOMPILE_ADDRESS {
+            if address == *DEPLOYER_SYSTEM_CONTRACT_ADDRESS {
                 let mut buffer = [0u8; 32];
-                key.to_little_endian(&mut buffer);
+                key.to_big_endian(&mut buffer);
                 let deployed_address = Address::from_slice(&buffer[12..]);
                 if let Some(known_assembly) = reverse_lookup_for_assembly.get(&value) {
                     deployed_contracts.insert(deployed_address, known_assembly.clone());
@@ -697,6 +714,9 @@ pub async fn run_vm_multi_contracts(
         deployed_contracts,
         execution_result,
         returndata_bytes,
+        raw_events,
+        to_l1_messages: l1_messages,
+        events
     }
 }
 
@@ -799,10 +819,13 @@ mod test {
             deployed_contracts,
             execution_result,
             returndata_bytes,
+            events,
+            to_l1_messages,
+            raw_events
         } = snapshot;
         dbg!(execution_has_ended);
         dbg!(execution_result);
         dbg!(registers);
-        dbg!(timestamp);
+        dbg!(events);
     }
 }

@@ -582,182 +582,22 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::runners::compiler_tests::VmLaunchOption;
 
-    // const SIMPLE_ASSEMBLY: &'static str = r#"
-    // .rodata
-    // RET_CONST:
-    //     .cell 4294967296
-    // .text
-    // main:
-    //     add 0, r0, r5
-    //     add 32, r0, r6
-    //     uma.calldata_read r5, r0, r5
-    //     uma.calldata_read r6, r0, r6
-    //     add! r5, r6, r5
-    //     uma.heap_write r0, r5, r0
-    //     add @RET_CONST[0], r0, r1
-    //     ret.ok r1
-    // "#;
-
-    const SIMPLE_ASSEMBLY: &'static str = r#"
-        .text
-        .file	"Test_26"
-        .rodata.cst32
-        .p2align	5
-    CPI0_0:
-        .cell 16777184
-    CPI0_1:
-        .cell 16777152
-    CPI0_2:
-        .cell 4294967297
-        .text
-        .globl	__entry
-    __entry:
-    .func_begin0:
-        nop	stack+=[7]
-        add	@CPI0_0[0], r0, r4
-        uma.heap_write	r4, r1, r0
-        add	@CPI0_1[0], r0, r1
-        uma.heap_write	r1, r2, r0
-        and	1, r3, r2
-        add	0, r0, r1
-        sub!	r2, r1, r2
-        jump.ne	@.BB0_3
-        jump	@.BB0_4
-    .BB0_3:
-        add	128, r0, r2
-        add	64, r0, r3
-        uma.heap_write	r3, r2, r0
-        add	@CPI0_0[0], r0, r3
-        uma.heap_write	r3, r2, r0
-        add	@CPI0_1[0], r0, r2
-        uma.heap_write	r2, r1, r0
-        jump	@.BB0_2
-    .BB0_4:
-    .tmp0:
-        near_call	r0, @__selector, @.BB0_1
-    .tmp1:
-    .BB0_2:
-        add	@CPI0_0[0], r0, r1
-        uma.heap_read	r1, r0, r1
-        add	@CPI0_2[0], r0, r2
-        mul	r1, r2, r1, r2
-        nop	stack-=[7]
-        ret.ok r1
-    .BB0_1:
-    .tmp2:
-        add	96, r0, r1
-        uma.heap_read	r1, r0, r1
-        add	1, r0, r2
-        sub!	r1, r2, r1
-        jump.eq	@.BB0_2
-        jump	@.BB0_5
-    .BB0_5:
-        ret.panic r0
-    .func_end0:
-
-        .rodata.cst32
-        .p2align	5
-    CPI1_0:
-        .cell 16777152
-    CPI1_1:
-        .cell 16777184
-    CPI1_2:
-        .cell -26959946667150639794667015087019630673637144422540572481103610249216
-    CPI1_3:
-        .cell 28023726311554802966544231341579932116438770666993405431137050659635310100480
-    CPI1_4:
-        .cell -4
-    CPI1_5:
-        .cell 40953307615929575801107647705360601464619672688377251939886941387873771847680
-    CPI1_6:
-        .cell 57896044618658097711785492504343953926634992332820282019728792003956564819967
-        .text
-    __selector:
-    .func_begin1:
-        add	128, r0, r1
-        add	64, r0, r2
-        uma.heap_write	r2, r1, r0
-        add	@CPI1_0[0], r0, r2
-        uma.heap_read	r2, r0, r2
-        add	3, r0, r3
-        sub!	r2, r3, r3
-        jump.gt	@.BB1_3
-        jump	@.BB1_1
-    .BB1_3:
-        add	@CPI1_1[0], r0, r3
-        uma.heap_read	r3, r0, r3
-        uma.calldata_read	r3, r0, r3
-        and	@CPI1_2[0], r3, r3
-        add	@CPI1_3[0], r0, r4
-        sub!	r3, r4, r4
-        add	@CPI1_4[0], r2, r3
-        add	42, r0, r2
-        add	@CPI1_6[0], r0, r4
-        sub!	r3, r4, r3
-        jump.le	@.BB1_2
-        jump	@.BB1_1
-    .BB1_5:
-        add	@CPI1_4[0], r0, r4
-        add	@CPI1_5[0], r0, r5
-        sub!	r3, r5, r3
-        add	r2, r4, r3
-        add	99, r0, r2
-        add	@CPI1_6[0], r0, r4
-        sub!	r3, r4, r3
-    .BB1_2:
-        uma.heap_write	r1, r2, r0
-        add	@CPI1_1[0], r0, r2
-        uma.heap_write	r2, r1, r0
-        add	32, r0, r1
-        add	@CPI1_0[0], r0, r2
-        uma.heap_write	r2, r1, r0
-        ret
-    .BB1_1:
-        add	0, r0, r1
-        add	@CPI1_1[0], r0, r2
-        uma.heap_write	r2, r1, r0
-        add	@CPI1_0[0], r0, r2
-        uma.heap_write	r2, r1, r0
-        ret.panic r0
-    .func_end1:
-
-        .note.GNU-stack
-    "#;
-
-    #[test]
-    fn run_something() {
-        use super::*;
-
-        let mut input = vec![0u8; 64];
-        input[31] = 1;
-        input[63] = 2;
-
-        let trace = run_text_assembly_full_trace(SIMPLE_ASSEMBLY.to_owned(), input, 12);
-
-        let _ = std::fs::remove_file("tmp.json");
-        let mut file = std::fs::File::create("tmp.json").unwrap();
-        let json = serde_json::to_string(&trace).unwrap();
-
-        file.write_all(json.as_bytes()).unwrap();
-    }
-
-    #[test]
-    fn test_manually() {
+    fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_text: &str) {
         use crate::runners::compiler_tests::*;
 
         use futures::executor::block_on;
         set_debug(true);
 
-        let assembly = Assembly::try_from(SIMPLE_ASSEMBLY.to_owned()).unwrap();
-        let calldata = hex::decode("5a8ac02d").unwrap();
+        let assembly = Assembly::try_from(assembly_text.to_owned()).unwrap();
         let snapshot = block_on(run_vm(
             assembly.clone(),
             calldata,
             HashMap::new(),
             vec![],
             None,
-            VmLaunchOption::Default,
+            options,
             1024,
             u16::MAX as usize,
             vec![assembly.clone()],
@@ -783,11 +623,432 @@ mod test {
             deployed_contracts,
             execution_result,
             returndata_bytes,
+            events,
+            to_l1_messages,
+            raw_events
         } = snapshot;
         dbg!(execution_has_ended);
         dbg!(execution_result);
         dbg!(registers);
-        dbg!(timestamp);
         dbg!(hex::encode((&returndata_bytes)));
+        dbg!(events);
+        dbg!(storage);
+    }
+
+    // const SIMPLE_ASSEMBLY: &'static str = r#"
+    // .rodata
+    // RET_CONST:
+    //     .cell 4294967296
+    // .text
+    // main:
+    //     add 0, r0, r5
+    //     add 32, r0, r6
+    //     uma.calldata_read r5, r0, r5
+    //     uma.calldata_read r6, r0, r6
+    //     add! r5, r6, r5
+    //     uma.heap_write r0, r5, r0
+    //     add @RET_CONST[0], r0, r1
+    //     ret.ok r1
+    // "#;
+
+    const SIMPLE_ASSEMBLY: &'static str = r#"
+    .text
+	.file	"Test_26"
+	.rodata.cst32
+	.p2align	5
+CPI0_0:
+	.cell 16777184
+CPI0_1:
+	.cell 16777152
+	.text
+	.globl	__entry
+__entry:
+.func_begin0:
+	nop	stack+=[7]
+	add	@CPI0_0[0], r0, r4
+	uma.heap_write	r4, r1, r0
+	add	@CPI0_1[0], r0, r1
+	uma.heap_write	r1, r2, r0
+	and	1, r3, r2
+	add	0, r0, r1
+	sub!	r2, r1, r2
+	jump.ne	@.BB0_3
+	jump	@.BB0_4
+.BB0_3:
+	add	128, r0, r2
+	add	64, r0, r3
+	uma.heap_write	r3, r2, r0
+	add	@CPI0_0[0], r0, r3
+	uma.heap_write	r3, r2, r0
+	add	@CPI0_1[0], r0, r2
+	uma.heap_write	r2, r1, r0
+	jump	@.BB0_2
+.BB0_4:
+.tmp0:
+	near_call	r0, @__selector, @.BB0_1
+.tmp1:
+.BB0_2:
+	add	@CPI0_0[0], r0, r1
+	uma.heap_read	r1, r0, r1
+	add	@CPI0_1[0], r0, r2
+	uma.heap_read	r2, r0, r2
+	shl.s	32, r2, r2
+	add	r2, r1, r1
+	nop	stack-=[7]
+	ret
+.BB0_1:
+.tmp2:
+	add	96, r0, r1
+	uma.heap_read	r1, r0, r1
+	add	1, r0, r2
+	sub!	r1, r2, r1
+	jump.eq	@.BB0_2
+	jump	@.BB0_5
+.BB0_5:
+	ret.panic r0
+.func_end0:
+
+	.rodata.cst32
+	.p2align	5
+CPI1_0:
+	.cell 16777152
+CPI1_1:
+	.cell 16777184
+CPI1_2:
+	.cell -26959946667150639794667015087019630673637144422540572481103610249216
+CPI1_3:
+	.cell 28023726311554802966544231341579932116438770666993405431137050659635310100480
+CPI1_4:
+	.cell -4
+CPI1_5:
+	.cell 40953307615929575801107647705360601464619672688377251939886941387873771847680
+CPI1_6:
+	.cell 57896044618658097711785492504343953926634992332820282019728792003956564819967
+	.text
+__selector:
+.func_begin1:
+	add	128, r0, r1
+	add	64, r0, r2
+	uma.heap_write	r2, r1, r0
+	add	@CPI1_0[0], r0, r2
+	uma.heap_read	r2, r0, r2
+	add	3, r0, r3
+	sub!	r2, r3, r3
+	jump.gt	@.BB1_3
+	jump	@.BB1_1
+.BB1_3:
+	add	@CPI1_1[0], r0, r3
+	uma.heap_read	r3, r0, r3
+	uma.calldata_read	r3, r0, r3
+	and	@CPI1_2[0], r3, r3
+	add	@CPI1_3[0], r0, r4
+	sub!	r3, r4, r4
+	add	@CPI1_4[0], r2, r3
+	add	42, r0, r2
+	add	@CPI1_6[0], r0, r4
+	sub!	r3, r4, r3
+	jump.le	@.BB1_2
+	jump	@.BB1_1
+.BB1_5:
+	add	@CPI1_4[0], r0, r4
+	add	@CPI1_5[0], r0, r5
+	sub!	r3, r5, r3
+	add	r2, r4, r3
+	add	99, r0, r2
+	add	@CPI1_6[0], r0, r4
+	sub!	r3, r4, r3
+.BB1_2:
+	uma.heap_write	r1, r2, r0
+	add	@CPI1_1[0], r0, r2
+	uma.heap_write	r2, r1, r0
+	add	32, r0, r1
+	add	@CPI1_0[0], r0, r2
+	uma.heap_write	r2, r1, r0
+	ret
+.BB1_1:
+	add	0, r0, r1
+	add	@CPI1_1[0], r0, r2
+	uma.heap_write	r2, r1, r0
+	add	@CPI1_0[0], r0, r2
+	uma.heap_write	r2, r1, r0
+	ret.panic r0
+.func_end1:
+
+	.note.GNU-stack
+    "#;
+
+    #[test]
+    fn run_something() {
+        use super::*;
+
+        let mut input = vec![0u8; 64];
+        input[31] = 1;
+        input[63] = 2;
+
+        let trace = run_text_assembly_full_trace(SIMPLE_ASSEMBLY.to_owned(), input, 12);
+
+        let _ = std::fs::remove_file("tmp.json");
+        let mut file = std::fs::File::create("tmp.json").unwrap();
+        let json = serde_json::to_string(&trace).unwrap();
+
+        file.write_all(json.as_bytes()).unwrap();
+    }
+
+    #[test]
+    fn test_manually() {
+        run_inner(hex::decode("5a8ac02d").unwrap(), VmLaunchOption::Default, SIMPLE_ASSEMBLY);
+    }
+
+    #[test]
+    fn test_constructor_manually() {
+        run_inner(hex::decode("5a8ac02d").unwrap(), VmLaunchOption::Constructor, SIMPLE_ASSEMBLY);
+    }
+
+    const WITH_EVENTS_ASSEMBLY: &'static str = r#"
+    .text
+	.file	"Test_41"
+	.rodata.cst32
+	.p2align	5
+CPI0_0:
+	.cell 16777184
+CPI0_1:
+	.cell 16777152
+	.text
+	.globl	__entry
+__entry:
+.func_begin0:
+	nop	stack+=[7]
+	add	@CPI0_0[0], r0, r4
+	uma.heap_write	r4, r1, r0
+	add	@CPI0_1[0], r0, r1
+	uma.heap_write	r1, r2, r0
+	and	1, r3, r2
+	add	0, r0, r1
+	sub!	r2, r1, r2
+	jump.ne	@.BB0_3
+	jump	@.BB0_4
+.BB0_3:
+	add	128, r0, r2
+	add	64, r0, r3
+	uma.heap_write	r3, r2, r0
+	add	@CPI0_0[0], r0, r3
+	uma.heap_write	r3, r2, r0
+	add	@CPI0_1[0], r0, r2
+	uma.heap_write	r2, r1, r0
+	jump	@.BB0_2
+.BB0_4:
+.tmp0:
+	near_call	r0, @__selector, @.BB0_1
+.tmp1:
+.BB0_2:
+	add	@CPI0_0[0], r0, r1
+	uma.heap_read	r1, r0, r1
+	add	@CPI0_1[0], r0, r2
+	uma.heap_read	r2, r0, r2
+	shl.s	32, r2, r2
+	add	r2, r1, r1
+	nop	stack-=[7]
+	ret
+.BB0_1:
+.tmp2:
+	add	96, r0, r1
+	uma.heap_read	r1, r0, r1
+	add	1, r0, r2
+	sub!	r1, r2, r1
+	jump.eq	@.BB0_2
+	jump	@.BB0_5
+.BB0_5:
+	ret.panic r0
+.func_end0:
+
+	.rodata.cst32
+	.p2align	5
+CPI1_0:
+	.cell 16777152
+CPI1_1:
+	.cell -4
+CPI1_2:
+	.cell 16777184
+CPI1_3:
+	.cell -26959946667150639794667015087019630673637144422540572481103610249216
+CPI1_4:
+	.cell 18957599724396051841795879574321980412497429171365101850932991142745373409280
+CPI1_5:
+	.cell -57896044618658097711785492504343953926634992332820282019728792003956564819968
+CPI1_6:
+	.cell 52549307936116447935400929610646957733401880485183426834406134051980385742268
+CPI1_7:
+	.cell 3735928559
+CPI1_8:
+	.cell 4588150944598771411443733190509957345959890284296518184527857552952610963977
+CPI1_9:
+	.cell 274877906945
+CPI1_10:
+	.cell 12648430
+CPI1_11:
+	.cell 25316831761693835374013077841922713676043321329999779885431350772770455861368
+CPI1_12:
+	.cell 137438953474
+	.text
+__selector:
+.func_begin1:
+	add	128, r0, r2
+	add	64, r0, r1
+	uma.heap_write	r1, r2, r0
+	add	@CPI1_0[0], r0, r3
+	uma.heap_read	r3, r0, r3
+	add	3, r0, r4
+	sub!	r3, r4, r4
+	jump.gt	@.BB1_2
+	jump	@.BB1_1
+.BB1_2:
+	add	@CPI1_1[0], r0, r5
+	add	@CPI1_2[0], r0, r4
+	uma.heap_read	r4, r0, r4
+	uma.calldata_read	r4, r0, r6
+	and	@CPI1_3[0], r6, r6
+	add	@CPI1_4[0], r0, r7
+	sub!	r6, r7, r6
+	add	r3, r5, r3
+	add	32, r0, r5
+	add	@CPI1_5[0], r0, r6
+	sub!	r3, r5, r5
+	add	0, r0, r5
+	add.lt	r6, r0, r5
+	and	r3, r6, r7
+	add	0, r0, r3
+	sub!	r7, r3, r8
+	add	0, r0, r8
+	add.gt	r6, r0, r8
+	sub!	r7, r6, r6
+	add.eq	r8, r0, r5
+	sub!	r5, r3, r5
+	add	4, r4, r4
+	uma.calldata_read	r4, r0, r4
+	add	@CPI1_6[0], r0, r5
+	event.first	1, r5
+	uma.heap_write	r2, r4, r0
+	add	@CPI1_7[0], r0, r5
+	add	160, r0, r6
+	uma.heap_write	r6, r5, r0
+	add	@CPI1_8[0], r0, r5
+	add	@CPI1_9[0], r0, r7
+	event.first	r7, r5
+	uma.heap_read	r6, r0, r5
+	uma.heap_read	r2, r0, r2
+	event	r2, r5
+	add	@CPI1_10[0], r0, r2
+	uma.heap_read	r1, r0, r5
+	uma.heap_write	r5, r2, r0
+	add	@CPI1_11[0], r0, r5
+	add	@CPI1_12[0], r0, r6
+	event.first	r6, r5
+	event	r4, r2
+	uma.heap_read	r1, r0, r1
+	add	@CPI1_2[0], r0, r2
+	uma.heap_write	r2, r1, r0
+	add	@CPI1_0[0], r0, r1
+	uma.heap_write	r1, r3, r0
+	ret
+.BB1_1:
+	add	0, r0, r1
+	add	@CPI1_2[0], r0, r2
+	uma.heap_write	r2, r1, r0
+	add	@CPI1_0[0], r0, r2
+	uma.heap_write	r2, r1, r0
+	ret.panic r0
+.func_end1:
+
+	.note.GNU-stack
+    "#;
+
+    #[test]
+    fn run_for_events() {
+        run_inner(hex::decode("29e99f07000000000000000000000000000000000000000000000000000000000000002a").unwrap(), VmLaunchOption::Default, WITH_EVENTS_ASSEMBLY);
+    }
+
+    const SIMPLE_TOUCH_STORAGE: &'static str = r#"
+    .text
+	.file	"Test_41"
+	.rodata.cst32
+	.p2align	5
+CPI0_0:
+	.cell 16777184
+CPI0_1:
+	.cell 16777152
+	.text
+	.globl	__entry
+__entry:
+.func_begin0:
+    add 42, r0, r1
+    add 1, r0, r2
+    sstore r2, r1
+    ret.ok r0
+
+	.note.GNU-stack
+    "#;
+
+    #[test]
+    fn run_for_simple_storage_touch() {
+        run_inner(hex::decode("").unwrap(), VmLaunchOption::Default, SIMPLE_TOUCH_STORAGE);
+    }
+
+    const SIMPLE_STORAGE_WITH_ROLLBACK: &'static str = r#"
+    .text
+	.file	"Test_41"
+	.rodata.cst32
+	.p2align	5
+CPI0_0:
+	.cell 16777184
+CPI0_1:
+	.cell 16777152
+	.text
+	.globl	__entry
+__entry:
+.func_begin0:
+    add 42, r0, r1
+    add 1, r0, r2
+    sstore r2, r1
+    ret.revert r0
+
+	.note.GNU-stack
+    "#;
+
+    #[test]
+    fn run_for_simple_storage_with_rollback() {
+        run_inner(hex::decode("").unwrap(), VmLaunchOption::Default, SIMPLE_STORAGE_WITH_ROLLBACK);
+    }
+
+    const SIMPLE_STORAGE_WITH_ROLLBACK_OF_CHILD: &'static str = r#"
+    .text
+	.file	"Test_41"
+	.rodata.cst32
+	.p2align	5
+CPI0_0:
+	.cell 16777184
+CPI0_1:
+	.cell 16777152
+	.text
+	.globl	__entry
+__entry:
+.func_begin0:
+    add 42, r0, r1
+    add 1, r0, r2
+    sstore r2, r1
+    call @.child
+    ret.revert r0
+.child:
+    add 99, r0, r1
+    add 2, r0, r2
+    sstore r2, r1
+    add 0, r0, r1
+    ret.ok r1
+.note.GNU-stack
+    "#;
+
+    #[test]
+    fn run_for_simple_storage_with_rollback_in_inner_frame() {
+        run_inner(hex::decode("").unwrap(), VmLaunchOption::Default, SIMPLE_STORAGE_WITH_ROLLBACK_OF_CHILD);
     }
 }
+
