@@ -649,8 +649,8 @@ pub async fn run_vm_multi_contracts(
     let events = merge_events(raw_events.clone());
 
     let (history, per_slot) = storage.clone().flatten_and_net_history();
-    dbg!(history);
-    dbg!(per_slot);
+    // dbg!(history);
+    // dbg!(per_slot);
 
     let storage = storage.inner;
     let storage = storage.into_iter().next().unwrap();
