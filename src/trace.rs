@@ -1,11 +1,9 @@
 use super::*;
 
 use std::collections::{HashMap, HashSet};
-use std::io::Write;
-use std::slice::SliceIndex;
 
 use serde::{Deserialize, Serialize};
-use zk_evm::zkevm_opcode_defs::{Opcode, OpcodeVariant, REGISTERS_COUNT};
+use zk_evm::zkevm_opcode_defs::{Opcode, REGISTERS_COUNT};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ContractSourceDebugInfo {
@@ -68,8 +66,8 @@ pub struct MemoryInteraction {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct VmTrace {
-    steps: Vec<VmExecutionStep>,
-    sources: HashMap<String, ContractSourceDebugInfo>,
+    pub steps: Vec<VmExecutionStep>,
+    pub sources: HashMap<String, ContractSourceDebugInfo>,
 }
 
 use crate::default_environment::*;
@@ -136,7 +134,7 @@ pub fn run_text_assembly_full_trace(
         empty_callstack_dummy_debug_info,
     );
 
-    let full_trace = VmTrace { steps, sources };
+    let full_trace = VmTrace { steps, sources};
 
     full_trace
 }
@@ -216,7 +214,7 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
 
     type SupportedMemory = SimpleMemory;
 
-    fn before_decoding(&mut self, state: VmLocalStateData<'_>, memory: &Self::SupportedMemory) {}
+    fn before_decoding(&mut self, _state: VmLocalStateData<'_>, _memory: &Self::SupportedMemory) {}
     fn after_decoding(
         &mut self,
         state: VmLocalStateData<'_>,
@@ -451,12 +449,12 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
     }
     fn after_execution(
         &mut self,
-        state: VmLocalStateData<'_>,
+        _state: VmLocalStateData<'_>,
         data: AfterExecutionData,
         memory: &Self::SupportedMemory,
     ) {
         // let aux = self.aux_info.take().unwrap();
-        let regs_before = self.regs_before.take().unwrap();
+        let _regs_before = self.regs_before.take().unwrap();
         let potentially_previous_context = self.callstack_info.take().unwrap();
         let code_page = potentially_previous_context.code_page.0;
         let base_memory_page = potentially_previous_context.base_memory_page.0;
@@ -563,12 +561,12 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
         }
 
         // special case for call or return
-        if let Opcode::FarCall(far_call_variant) = data.opcode.variant.opcode {
+        if let Opcode::FarCall(_far_call_variant) = data.opcode.variant.opcode {
             self.did_call_recently = true;
         }
 
         // special case for call or return
-        if let Opcode::Ret(return_variant) = data.opcode.variant.opcode {
+        if let Opcode::Ret(_return_variant) = data.opcode.variant.opcode {
             if !potentially_previous_context.is_local_frame {
                 // only on far return
                 self.did_return_recently = true;
@@ -588,8 +586,6 @@ mod test {
         use crate::runners::compiler_tests::*;
 
         use futures::executor::block_on;
-        set_debug(true);
-
         let assembly = Assembly::try_from(assembly_text.to_owned()).unwrap();
         let snapshot = block_on(run_vm(
             assembly.clone(),
@@ -791,6 +787,7 @@ __selector:
         let mut file = std::fs::File::create("tmp.json").unwrap();
         let json = serde_json::to_string(&trace).unwrap();
 
+        use std::io::Write;
         file.write_all(json.as_bytes()).unwrap();
     }
 

@@ -1,12 +1,12 @@
 use zk_evm::{abstractions::*, testing::memory::SimpleMemory};
 use zkevm_assembly::Assembly;
 
-use crate::runners::compiler_tests::get_debug;
+use crate::runners::compiler_tests::{get_tracing_mode, VmTracingOptions};
 
 #[derive(Debug)]
-pub struct DebugTracer;
+pub struct DummyVmTracer;
 
-impl Tracer for DebugTracer {
+impl Tracer for DummyVmTracer {
     const CALL_BEFORE_DECODING: bool = true;
     const CALL_AFTER_DECODING: bool = true;
     const CALL_BEFORE_EXECUTION: bool = true;
@@ -14,41 +14,45 @@ impl Tracer for DebugTracer {
 
     type SupportedMemory = SimpleMemory;
 
-    fn before_decoding(&mut self, state: VmLocalStateData<'_>, memory: &Self::SupportedMemory) {
-        if !get_debug() {
+    fn before_decoding(
+        &mut self,
+        state: VmLocalStateData<'_>,
+        _memory: &Self::SupportedMemory
+    ) {
+        if get_tracing_mode() != VmTracingOptions::ManualVerbose {
             return;
         }
         dbg!(state);
     }
     fn after_decoding(
         &mut self,
-        state: VmLocalStateData<'_>,
+        _state: VmLocalStateData<'_>,
         data: AfterDecodingData,
-        memory: &Self::SupportedMemory,
+        _memory: &Self::SupportedMemory,
     ) {
-        if !get_debug() {
+        if get_tracing_mode() != VmTracingOptions::ManualVerbose {
             return;
         }
         dbg!(data);
     }
     fn before_execution(
         &mut self,
-        state: VmLocalStateData<'_>,
+        _state: VmLocalStateData<'_>,
         data: BeforeExecutionData,
-        memory: &Self::SupportedMemory,
+        _memory: &Self::SupportedMemory,
     ) {
-        if !get_debug() {
+        if get_tracing_mode() != VmTracingOptions::ManualVerbose {
             return;
         }
         dbg!(data);
     }
     fn after_execution(
         &mut self,
-        state: VmLocalStateData<'_>,
+        _state: VmLocalStateData<'_>,
         data: AfterExecutionData,
-        memory: &Self::SupportedMemory,
+        _memory: &Self::SupportedMemory,
     ) {
-        if !get_debug() {
+        if get_tracing_mode() != VmTracingOptions::ManualVerbose {
             return;
         }
         dbg!(data);
@@ -68,12 +72,11 @@ impl<'a> Tracer for DebugTracerWithAssembly<'a> {
 
     type SupportedMemory = SimpleMemory;
 
-    fn before_decoding(&mut self, state: VmLocalStateData<'_>, memory: &Self::SupportedMemory) {
-        if !get_debug() {
+    fn before_decoding(&mut self, state: VmLocalStateData<'_>, _memory: &Self::SupportedMemory) {
+        if get_tracing_mode() != VmTracingOptions::ManualVerbose {
             return;
         }
         println!("New cycle -------------------------");
-        // dbg!(state);
         let pc = state.vm_local_state.callstack.get_current_stack().pc;
         if let Some(line) = self.assembly.pc_line_mapping.get(&(pc as usize)).copied() {
             let l = if line == 0 {
@@ -92,40 +95,33 @@ impl<'a> Tracer for DebugTracerWithAssembly<'a> {
     }
     fn after_decoding(
         &mut self,
-        state: VmLocalStateData<'_>,
-        data: AfterDecodingData,
-        memory: &Self::SupportedMemory,
+        _state: VmLocalStateData<'_>,
+        _data: AfterDecodingData,
+        _memory: &Self::SupportedMemory,
     ) {
-        if !get_debug() {
+        if get_tracing_mode() != VmTracingOptions::ManualVerbose {
             return;
         }
-        // println!(
-        //     "Raw opcode LE: 0x{}",
-        //     hex::encode(&data.raw_opcode_unmasked.to_le_bytes())
-        // );
-        // dbg!(data);
     }
     fn before_execution(
         &mut self,
-        state: VmLocalStateData<'_>,
-        data: BeforeExecutionData,
-        memory: &Self::SupportedMemory,
+        _state: VmLocalStateData<'_>,
+        _data: BeforeExecutionData,
+        _memory: &Self::SupportedMemory,
     ) {
-        if !get_debug() {
+        if get_tracing_mode() != VmTracingOptions::ManualVerbose {
             return;
         }
-        // dbg!(data);
     }
     fn after_execution(
         &mut self,
         state: VmLocalStateData<'_>,
-        data: AfterExecutionData,
-        memory: &Self::SupportedMemory,
+        _data: AfterExecutionData,
+        _memory: &Self::SupportedMemory,
     ) {
-        if !get_debug() {
+        if get_tracing_mode() != VmTracingOptions::ManualVerbose {
             return;
         }
-        // dbg!(data);
         println!(
             "Registers: {:?}",
             state

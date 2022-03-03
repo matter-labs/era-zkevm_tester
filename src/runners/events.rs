@@ -1,4 +1,3 @@
-use super::*;
 use zk_evm::{testing::event_sink::{EventMessage}, ethereum_types::Address};
 
 #[derive(Clone)]

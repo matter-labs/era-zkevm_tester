@@ -4,7 +4,7 @@ use crate::default_environment::*;
 use crate::{Address, H256, U256};
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
 use zk_evm::aux_structures::*;
 use zk_evm::block_properties::*;
 use crate::runners::events::SolidityLikeEvent;
@@ -14,7 +14,6 @@ use zk_evm::precompiles::DEPLOYER_SYSTEM_CONTRACT_ADDRESS;
 use zk_evm::testing::decommitter::SimpleDecommitter;
 use zk_evm::testing::event_sink::{InMemoryEventSink, EventMessage};
 use zk_evm::testing::memory::SimpleMemory;
-use zk_evm::testing::simple_tracer::NoopTracer;
 use zk_evm::testing::storage::InMemoryStorage;
 use zk_evm::testing::*;
 use zk_evm::vm_state::*;
@@ -598,19 +597,88 @@ pub async fn run_vm_multi_contracts(
         vm.local_state.registers[3] = r4;
     }
 
-    let mut tracer = super::debug_tracer::DebugTracerWithAssembly {
-        assembly: &initial_assembly,
-    };
-
     let mut result = None;
 
-    for _ in 0..cycles_limit {
-        vm.cycle(&mut tracer);
+    match get_tracing_mode() {
+        VmTracingOptions::None => {
+            use crate::runners::debug_tracer::DummyVmTracer;
+            let mut tracer = DummyVmTracer;
+            for _ in 0..cycles_limit {
+                vm.cycle(&mut tracer);
+        
+                // early return
+                if let Some(end_result) = vm_may_have_ended(&vm) {
+                    result = Some(end_result);
+                    break;
+                }
+            }
+        },
+        VmTracingOptions::TraceDump => {
+            use crate::trace::*;
+            let debug_info = ContractSourceDebugInfo {
+                assembly_code: initial_assembly.assembly_code.clone(),
+                pc_line_mapping: initial_assembly.pc_line_mapping.clone(),
+                active_lines: std::collections::HashSet::new(),
+            };
 
-        // early return
-        if let Some(end_result) = vm_may_have_ended(&vm) {
-            result = Some(end_result);
-            break;
+            let mut tracer = VmDebugTracer::new(debug_info);
+            
+            for _ in 0..cycles_limit {
+                vm.cycle(&mut tracer);
+        
+                // early return
+                if let Some(end_result) = vm_may_have_ended(&vm) {
+                    result = Some(end_result);
+                    break;
+                }
+            }
+
+            pub fn is_trace_enabled() -> bool {
+                std::env::var("RUST_LOG")
+                    .map(|variable| variable.contains("vm=trace"))
+                    .unwrap_or_default()
+            }
+
+            if is_trace_enabled() {
+                let VmDebugTracer {
+                    steps, debug_info, ..
+                } = tracer;
+            
+                let empty_callstack_dummy_debug_info = ContractSourceDebugInfo {
+                    assembly_code: "nop r0, r0, r0, r0".to_owned(),
+                    pc_line_mapping: HashMap::from([(0, 0)]),
+                    active_lines: std::collections::HashSet::from([0]),
+                };
+
+                let mut sources = HashMap::new();
+
+                sources.insert(
+                    EMPTY_CONTEXT_HEX.to_owned(),
+                    empty_callstack_dummy_debug_info,
+                );
+                sources.insert(
+                    format!("0x{}", hex::encode(entry_address.as_bytes())),
+                    debug_info
+                );
+
+                let full_trace = VmTrace { steps, sources };
+                output_execution_trace(full_trace, entry_address);
+            }
+        },
+        VmTracingOptions::ManualVerbose => {
+            use crate::runners::debug_tracer::DebugTracerWithAssembly;
+            let mut tracer = DebugTracerWithAssembly {
+                assembly: &initial_assembly,
+            };
+            for _ in 0..cycles_limit {
+                vm.cycle(&mut tracer);
+        
+                // early return
+                if let Some(end_result) = vm_may_have_ended(&vm) {
+                    result = Some(end_result);
+                    break;
+                }
+            }
         }
     }
 
@@ -648,7 +716,7 @@ pub async fn run_vm_multi_contracts(
     use crate::runners::events::merge_events;
     let events = merge_events(raw_events.clone());
 
-    let (history, per_slot) = storage.clone().flatten_and_net_history();
+    let (_history, _per_slot) = storage.clone().flatten_and_net_history();
     // dbg!(history);
     // dbg!(per_slot);
 
@@ -720,19 +788,41 @@ pub async fn run_vm_multi_contracts(
     }
 }
 
-pub static USE_DEBUG: AtomicBool = AtomicBool::new(false);
-
-pub fn set_debug(value: bool) {
-    USE_DEBUG.store(value, std::sync::atomic::Ordering::SeqCst);
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u64)]
+pub enum VmTracingOptions {
+    None = 0,
+    TraceDump = 1,
+    ManualVerbose = 2,
 }
 
-pub fn get_debug() -> bool {
-    USE_DEBUG.load(std::sync::atomic::Ordering::Relaxed)
+impl VmTracingOptions {
+    pub const fn from_u64(value: u64) -> Self {
+        match value {
+            x if x == Self::None as u64 => Self::None,
+            x if x == Self::TraceDump as u64 => Self::TraceDump,
+            x if x == Self::ManualVerbose as u64 => Self::ManualVerbose,
+            _ => unreachable!()
+        }
+    }
+
+    pub const fn as_u64(self) -> u64 {
+        self as u64
+    }
+}
+
+pub static TRACE_MODE: AtomicU64 = AtomicU64::new(VmTracingOptions::TraceDump as u64);
+
+pub fn set_tracing_mode(value: VmTracingOptions) {
+    TRACE_MODE.store(value.as_u64(), std::sync::atomic::Ordering::SeqCst);
+}
+
+pub fn get_tracing_mode() -> VmTracingOptions {
+    VmTracingOptions::from_u64(TRACE_MODE.load(std::sync::atomic::Ordering::Relaxed))
 }
 
 #[cfg(test)]
 mod test {
-    use core::time;
 
     use super::*;
 
@@ -783,7 +873,7 @@ mod test {
     #[test]
     fn test_fib() {
         use futures::executor::block_on;
-        set_debug(true);
+        set_tracing_mode(VmTracingOptions::ManualVerbose);
 
         let assembly = Assembly::try_from(FIB_ASSEMBLY.to_owned()).unwrap();
 

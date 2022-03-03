@@ -12,6 +12,11 @@ pub const DEFAULT_CALLEE: &'static str = "5000";
 pub const EMPTY_CONTEXT_HEX: &'static str = "0x0000000000000000000000000000000000000000";
 pub const DEFAULT_CALLEE_HEX: &'static str = "0x0000000000000000000000000000000000001388";
 
+pub fn default_callee_address() -> Address {
+    let bytes: [u8; 20] = hex::decode(&DEFAULT_CALLEE_HEX[2..]).unwrap().try_into().unwrap();
+    Address::from_slice(&bytes)
+}
+
 pub fn address_from_str_radix(str: &str, radix: u32) -> Address {
     use num_traits::Num;
     let value = num_bigint::BigUint::from_str_radix(str, radix).unwrap();

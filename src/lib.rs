@@ -19,9 +19,4 @@ pub mod runners;
 
 pub mod trace;
 
-use vlog;
-
-use zk_evm::flags::Flags;
-use zk_evm::opcodes::DecodedOpcode;
-
 // mod tests;
