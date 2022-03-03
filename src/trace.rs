@@ -14,21 +14,21 @@ pub struct ContractSourceDebugInfo {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct VmExecutionStep {
-    contract_address: String,
-    registers: [String; REGISTERS_COUNT],
-    pc: u16,
-    sp: u16,
-    set_flags: Vec<String>,
-    skip_cycle: bool,
-    code_page_index: u32,
-    heap_page_index: u32,
-    stack_page_index: u32,
-    calldata_page_index: u32,
-    returndata_page_index: u32,
-    register_interactions: HashMap<usize, MemoryAccessType>,
-    memory_interactions: Vec<MemoryInteraction>,
-    memory_snapshots: Vec<MemorySnapshot>,
-    error: Option<String>,
+    pub contract_address: String,
+    pub registers: [String; REGISTERS_COUNT],
+    pub pc: u16,
+    pub sp: u16,
+    pub set_flags: Vec<String>,
+    pub skip_cycle: bool,
+    pub code_page_index: u32,
+    pub heap_page_index: u32,
+    pub stack_page_index: u32,
+    pub calldata_page_index: u32,
+    pub returndata_page_index: u32,
+    pub register_interactions: HashMap<usize, MemoryAccessType>,
+    pub memory_interactions: Vec<MemoryInteraction>,
+    pub memory_snapshots: Vec<MemorySnapshot>,
+    pub error: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -57,11 +57,11 @@ pub enum MemoryAccessType {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct MemoryInteraction {
-    memory_type: MemoryType,
-    page: u32,
-    address: u32,
-    value: String,
-    direction: MemoryAccessType,
+    pub memory_type: MemoryType,
+    pub page: u32,
+    pub address: u32,
+    pub value: String,
+    pub direction: MemoryAccessType,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

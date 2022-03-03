@@ -15,10 +15,9 @@ use zk_evm::testing::decommitter::SimpleDecommitter;
 use zk_evm::testing::event_sink::{InMemoryEventSink, EventMessage};
 use zk_evm::testing::memory::SimpleMemory;
 use zk_evm::testing::storage::InMemoryStorage;
-use zk_evm::testing::*;
 use zk_evm::vm_state::*;
-use zk_evm::witness_trace::DummyTracer;
 use zkevm_assembly::Assembly;
+use crate::runners::simple_witness_tracer::MemoryLogWitnessTracer;
 
 use sha2::{Digest, Sha256};
 
@@ -307,8 +306,36 @@ pub async fn run_vm(
     .await
 }
 
+
+pub struct ExtendedTestingTools<const B: bool>{
+    pub storage: InMemoryStorage,
+    pub memory: SimpleMemory,
+    pub event_sink: InMemoryEventSink,
+    pub precompiles_processor: DefaultPrecompilesProcessor<B>,
+    pub decommittment_processor: SimpleDecommitter<B>,
+    pub witness_tracer: MemoryLogWitnessTracer,
+}
+
+pub fn create_default_testing_tools() -> ExtendedTestingTools<false> {
+    let storage = InMemoryStorage::new();
+    let memory = SimpleMemory::new();
+    let event_sink = InMemoryEventSink::new();
+    let precompiles_processor = DefaultPrecompilesProcessor::<false>;
+    let decommittment_processor = SimpleDecommitter::<false>::new();
+    let witness_tracer = MemoryLogWitnessTracer{queries: vec![]};
+
+    ExtendedTestingTools::<false> {
+        storage,
+        memory,
+        event_sink,
+        precompiles_processor,
+        decommittment_processor,
+        witness_tracer,
+    }
+}
+
 pub fn create_vm<'a, const B: bool>(
-    tools: &'a mut BasicTestingTools<B>,
+    tools: &'a mut ExtendedTestingTools<B>,
     block_properties: &'a BlockProperties,
     context: VmExecutionContext,
     registers: Vec<U256>,
@@ -325,7 +352,7 @@ pub fn create_vm<'a, const B: bool>(
         InMemoryEventSink,
         DefaultPrecompilesProcessor<B>,
         SimpleDecommitter<B>,
-        DummyTracer,
+        MemoryLogWitnessTracer,
     >,
     HashMap<U256, Assembly>,
 ) {
@@ -445,7 +472,7 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool>(
         InMemoryEventSink,
         DefaultPrecompilesProcessor<B>,
         SimpleDecommitter<B>,
-        DummyTracer,
+        MemoryLogWitnessTracer,
     >,
 ) -> Option<VmExecutionResult> {
     let execution_has_ended = vm.execution_has_ended();
@@ -624,8 +651,41 @@ pub async fn run_vm_multi_contracts(
             let mut tracer = VmDebugTracer::new(debug_info);
             
             for _ in 0..cycles_limit {
+                vm.witness_tracer.queries.truncate(0);
                 vm.cycle(&mut tracer);
-        
+
+                // manually replace all memory interactions
+                let last_step = tracer.steps.last_mut().unwrap();
+                last_step.memory_interactions.truncate(0);
+                for query in vm.witness_tracer.queries.drain(..) {
+                    let memory_type = match query.location.memory_type {
+                        zk_evm::abstractions::MemoryType::Calldata => crate::trace::MemoryType::calldata,
+                        zk_evm::abstractions::MemoryType::Returndata => crate::trace::MemoryType::calldata,
+                        zk_evm::abstractions::MemoryType::Heap => crate::trace::MemoryType::calldata,
+                        zk_evm::abstractions::MemoryType::Code => crate::trace::MemoryType::calldata,
+                        zk_evm::abstractions::MemoryType::Stack => crate::trace::MemoryType::calldata,
+                    };
+
+                    let page = query.location.page.0;
+                    let address = query.location.index.0;
+                    let value = format!("{:x}", query.value);
+                    let direction = if query.rw_flag {
+                        crate::trace::MemoryAccessType::Write
+                    } else {
+                        crate::trace::MemoryAccessType::Read
+                    };
+
+                    let as_interaction = MemoryInteraction {
+                        memory_type,
+                        page,
+                        address,
+                        value,
+                        direction
+                    };
+
+                    last_step.memory_interactions.push(as_interaction);
+                }
+
                 // early return
                 if let Some(end_result) = vm_may_have_ended(&vm) {
                     result = Some(end_result);
@@ -703,7 +763,7 @@ pub async fn run_vm_multi_contracts(
     let mut result_storage = HashMap::new();
     let mut deployed_contracts = HashMap::new();
 
-    let BasicTestingTools {
+    let ExtendedTestingTools {
         storage,
         memory,
         event_sink,

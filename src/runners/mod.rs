@@ -1,6 +1,7 @@
-pub mod compiler_tests;
 pub mod debug_tracer;
 pub mod events;
+pub mod simple_witness_tracer;
+pub mod compiler_tests;
 
 use crate::trace::VmTrace;
 use crate::Address;
