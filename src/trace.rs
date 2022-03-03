@@ -449,7 +449,7 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
     }
     fn after_execution(
         &mut self,
-        _state: VmLocalStateData<'_>,
+        state: VmLocalStateData<'_>,
         data: AfterExecutionData,
         memory: &Self::SupportedMemory,
     ) {
@@ -462,6 +462,10 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
         // - memory writes
 
         let trace_step = self.steps.last_mut().unwrap();
+        trace_step.registers = state
+        .vm_local_state
+        .registers
+        .map(|el| format!("0x{:x}", el));
 
         if let Some(mem) = data.dst0_mem_location {
             let MemoryLocation {
