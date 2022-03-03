@@ -660,10 +660,10 @@ pub async fn run_vm_multi_contracts(
                 for query in vm.witness_tracer.queries.drain(..) {
                     let memory_type = match query.location.memory_type {
                         zk_evm::abstractions::MemoryType::Calldata => crate::trace::MemoryType::calldata,
-                        zk_evm::abstractions::MemoryType::Returndata => crate::trace::MemoryType::calldata,
-                        zk_evm::abstractions::MemoryType::Heap => crate::trace::MemoryType::calldata,
-                        zk_evm::abstractions::MemoryType::Code => crate::trace::MemoryType::calldata,
-                        zk_evm::abstractions::MemoryType::Stack => crate::trace::MemoryType::calldata,
+                        zk_evm::abstractions::MemoryType::Returndata => crate::trace::MemoryType::returndata,
+                        zk_evm::abstractions::MemoryType::Heap => crate::trace::MemoryType::heap,
+                        zk_evm::abstractions::MemoryType::Code => crate::trace::MemoryType::code,
+                        zk_evm::abstractions::MemoryType::Stack => crate::trace::MemoryType::stack,
                     };
 
                     let page = query.location.page.0;
