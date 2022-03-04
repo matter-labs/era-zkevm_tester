@@ -175,6 +175,8 @@ pub(crate) fn dump_memory_page_using_abi(
 ) -> Vec<u8> {
     let offset = r1.0[0] as usize;
     let length = r2.0[0] as usize;
+    assert!(offset < (1u32 << 24) as usize);
+    assert!(length < (1u32 << 24) as usize);
 
     let first_word = offset / 32;
     let end_byte = offset + length;
@@ -199,12 +201,12 @@ pub(crate) fn dump_memory_page_using_abi(
         if i != num_remaining - 1 {
             dump.extend_from_slice(&el);
         } else {
-            let bytes_to_take = 32 - (end_byte % 32);
+            let bytes_to_take = end_byte % 32;
             dump.extend_from_slice(&el[..bytes_to_take]);
         }
     }
 
-    assert_eq!(dump.len(), length);
+    assert_eq!(dump.len(), length, "tried to dump with offset {}, length {}, got a bytestring of length {}", offset, length, dump.len());
 
     dump
 }
