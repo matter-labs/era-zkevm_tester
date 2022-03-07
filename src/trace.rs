@@ -625,7 +625,8 @@ mod test {
             returndata_bytes,
             events,
             to_l1_messages,
-            raw_events
+            raw_events,
+            ..
         } = snapshot;
         dbg!(execution_has_ended);
         dbg!(execution_result);

@@ -255,6 +255,7 @@ pub struct VmSnapshot {
     pub raw_events: Vec<EventMessage>,
     pub to_l1_messages: Vec<EventMessage>,
     pub events: Vec<SolidityLikeEvent>,
+    pub serialized_events: String,
 }
 
 #[derive(Debug)]
@@ -826,6 +827,10 @@ pub async fn run_vm_multi_contracts(
         VmExecutionResult::MostLikelyDidNotFinish(..) => vec![],
     };
 
+    let compiler_tests_events: Vec<crate::runners::events::Event> = events.iter().cloned().map(|el| el.into()).collect();
+
+    let serialized_events = serde_json::to_string_pretty(&compiler_tests_events).unwrap();
+
     VmSnapshot {
         registers: local_state.registers,
         flags: local_state.flags,
@@ -846,7 +851,8 @@ pub async fn run_vm_multi_contracts(
         returndata_bytes,
         raw_events,
         to_l1_messages: l1_messages,
-        events
+        events,
+        serialized_events
     }
 }
 
@@ -973,7 +979,8 @@ mod test {
             returndata_bytes,
             events,
             to_l1_messages,
-            raw_events
+            raw_events,
+            ..
         } = snapshot;
         dbg!(execution_has_ended);
         dbg!(execution_result);

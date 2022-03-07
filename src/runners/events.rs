@@ -111,3 +111,43 @@ pub fn merge_events(events: Vec<EventMessage>) -> Vec<SolidityLikeEvent> {
     
     result
 }
+
+// This is just a copy-paste from compiler-tester repo that allows to pass
+// data in a serialized forms without much of the interpretation
+
+use serde::{Deserialize, Serialize};
+
+///
+/// The compiler test case outcome event.
+///
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Event {
+    /// The indexed topics.
+    pub topics: Vec<String>,
+    /// The ordinary values.
+    pub values: Vec<String>,
+}
+
+impl Into<Event> for SolidityLikeEvent {
+    fn into(self) -> Event { 
+        // topics are formatted as hex with 0x
+        let topics = self.topics.into_iter().map(|el| format!("0x{}", hex::encode(&el))).collect();
+        // values are formatted as integers
+
+        let mut values = vec![];
+        let mut it = self.data.chunks_exact(32);
+        use crate::U256;
+        for el in &mut it {
+            let as_integer = U256::from_big_endian(el);
+            values.push(format!("{}", as_integer));
+        }
+
+        let remainder = it.remainder();
+        if !remainder.is_empty() {
+            let as_integer = U256::from_big_endian(remainder);
+            values.push(format!("{}", as_integer));
+        }
+
+        Event { topics, values}
+    }
+}
