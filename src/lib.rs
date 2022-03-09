@@ -19,4 +19,4 @@ pub mod runners;
 
 pub mod trace;
 
-// mod tests;
+mod tests;

@@ -581,60 +581,61 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
     }
 }
 
+use crate::runners::compiler_tests::VmLaunchOption;
+
+pub(crate) fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_text: &str) {
+    use crate::runners::compiler_tests::*;
+
+    use futures::executor::block_on;
+    let assembly = Assembly::try_from(assembly_text.to_owned()).unwrap();
+    let snapshot = block_on(run_vm(
+        assembly.clone(),
+        calldata,
+        HashMap::new(),
+        vec![],
+        None,
+        options,
+        1024,
+        u16::MAX as usize,
+        vec![assembly.clone()],
+        vec![],
+        HashMap::new(),
+    ));
+
+    let VmSnapshot {
+        registers,
+        flags,
+        timestamp,
+        memory_page_counter,
+        tx_number_in_block,
+        previous_pc,
+        did_call_or_ret_recently,
+        tx_origin,
+        calldata_area_dump,
+        returndata_area_dump,
+        execution_has_ended,
+        stack_dump,
+        heap_dump,
+        storage,
+        deployed_contracts,
+        execution_result,
+        returndata_bytes,
+        events,
+        to_l1_messages,
+        raw_events,
+        ..
+    } = snapshot;
+    dbg!(execution_has_ended);
+    dbg!(execution_result);
+    dbg!(registers);
+    dbg!(hex::encode(&returndata_bytes));
+    dbg!(events);
+    dbg!(storage);
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::runners::compiler_tests::VmLaunchOption;
-
-    fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_text: &str) {
-        use crate::runners::compiler_tests::*;
-
-        use futures::executor::block_on;
-        let assembly = Assembly::try_from(assembly_text.to_owned()).unwrap();
-        let snapshot = block_on(run_vm(
-            assembly.clone(),
-            calldata,
-            HashMap::new(),
-            vec![],
-            None,
-            options,
-            1024,
-            u16::MAX as usize,
-            vec![assembly.clone()],
-            vec![],
-            HashMap::new(),
-        ));
-
-        let VmSnapshot {
-            registers,
-            flags,
-            timestamp,
-            memory_page_counter,
-            tx_number_in_block,
-            previous_pc,
-            did_call_or_ret_recently,
-            tx_origin,
-            calldata_area_dump,
-            returndata_area_dump,
-            execution_has_ended,
-            stack_dump,
-            heap_dump,
-            storage,
-            deployed_contracts,
-            execution_result,
-            returndata_bytes,
-            events,
-            to_l1_messages,
-            raw_events,
-            ..
-        } = snapshot;
-        dbg!(execution_has_ended);
-        dbg!(execution_result);
-        dbg!(registers);
-        dbg!(hex::encode((&returndata_bytes)));
-        dbg!(events);
-        dbg!(storage);
-    }
 
     // const SIMPLE_ASSEMBLY: &'static str = r#"
     // .rodata

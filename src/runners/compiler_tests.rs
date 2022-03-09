@@ -187,8 +187,25 @@ pub(crate) fn dump_memory_page_using_abi(
 
     let mut page_part = memory.dump_page_content(page, (first_word as u32)..(last_word as u32));
     let mut dump = Vec::with_capacity(length);
+    if length == 0 {
+        return dump;
+    }
 
     let mut drain = page_part.drain(..);
+
+    if first_word == last_word {
+        // we dump word or less
+
+        if let Some(first) = drain.next() {
+            let offset_bytes = offset % 32;
+            let end = end_byte % 32;
+            dump.extend_from_slice(&first[offset_bytes..end]);
+        }
+
+        assert_eq!(dump.len(), length, "tried to dump with offset {}, length {}, got a bytestring of length {}", offset, length, dump.len());
+
+        return dump;
+    }
 
     if let Some(first) = drain.next() {
         let offset_bytes = offset % 32;

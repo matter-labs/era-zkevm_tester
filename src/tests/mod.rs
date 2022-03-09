@@ -1,6 +1,4 @@
-pub(crate) mod superior_tests;
+// pub(crate) mod superior_tests;
+pub(crate) mod simple;
 
-use crate::runner::*;
-use crate::default_environment::*;
-use zk_evm::vm_state::CallStackEntry;
-use zk_evm::aux_structures::MemoryPage;
+use crate::runners::*;
