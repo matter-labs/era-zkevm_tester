@@ -468,6 +468,7 @@ pub fn create_vm<'a, const B: bool>(
         pc: initial_pc,
         exception_handler_location: u16::MAX,
         ergs_remaining: u32::MAX,
+        pubdata_bytes_remaining: u16::MAX,
         this_shard_id: 0,
         caller_shard_id: 0,
         code_shard_id: 0,

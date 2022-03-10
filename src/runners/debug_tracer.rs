@@ -128,7 +128,7 @@ impl<'a> Tracer for DebugTracerWithAssembly<'a> {
                 .vm_local_state
                 .registers
                 .iter()
-                .map(|el| format!("{:x}", el))
+                .map(|el| format!("0x{:064x}", el))
                 .collect::<Vec<_>>()
         );
     }
