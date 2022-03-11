@@ -522,7 +522,6 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool>(
                 Some(VmExecutionResult::Panic)
             } else {
                 let returndata = dump_memory_page_using_abi(&vm.memory, returndata_page.0, r1, r2);
-                dbg!(hex::encode(&returndata));
                 Some(VmExecutionResult::Revert(returndata))
             }
         }
