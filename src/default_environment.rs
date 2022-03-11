@@ -80,7 +80,6 @@ pub fn create_vm_with_default_settings<'a, const B: bool>(
         pc: 0u16,
         exception_handler_location: 0u16,
         ergs_remaining: u32::MAX,
-        pubdata_bytes_remaining: u16::MAX,
         this_shard_id: 0,
         caller_shard_id: 0,
         code_shard_id: 0,

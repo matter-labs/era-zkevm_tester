@@ -468,7 +468,6 @@ pub fn create_vm<'a, const B: bool>(
         pc: initial_pc,
         exception_handler_location: u16::MAX,
         ergs_remaining: u32::MAX,
-        pubdata_bytes_remaining: u16::MAX,
         this_shard_id: 0,
         caller_shard_id: 0,
         code_shard_id: 0,
@@ -523,7 +522,7 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool>(
                 Some(VmExecutionResult::Panic)
             } else {
                 let returndata = dump_memory_page_using_abi(&vm.memory, returndata_page.0, r1, r2);
-
+                dbg!(hex::encode(&returndata));
                 Some(VmExecutionResult::Revert(returndata))
             }
         }
