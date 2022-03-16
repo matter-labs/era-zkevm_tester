@@ -15,6 +15,7 @@ pub(crate) fn run_for_result_only(assembly_text: &str) {
     use futures::executor::block_on;
     let assembly = Assembly::try_from(assembly_text.to_owned()).unwrap();
     let snapshot = block_on(run_vm(
+        "manual".to_owned(),
         assembly.clone(),
         vec![],
         HashMap::new(),

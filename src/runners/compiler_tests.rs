@@ -287,6 +287,7 @@ pub struct RawInMemoryStorage {
 ///
 #[allow(clippy::too_many_arguments)]
 pub async fn run_vm(
+    test_name: String,
     assembly: Assembly,
     calldata: Vec<u8>,
     storage: HashMap<StorageKey, H256>,
@@ -310,6 +311,7 @@ pub async fn run_vm(
     let mut contracts: HashMap<Address, Assembly> = HashMap::new();
     contracts.insert(Address::default(), assembly);
     run_vm_multi_contracts(
+        test_name,
         contracts,
         calldata,
         storage,
@@ -537,6 +539,7 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool>(
 ///
 #[allow(clippy::too_many_arguments)]
 pub async fn run_vm_multi_contracts(
+    test_name: String,
     contracts: HashMap<Address, Assembly>,
     calldata: Vec<u8>,
     storage: HashMap<StorageKey, H256>,
@@ -741,7 +744,7 @@ pub async fn run_vm_multi_contracts(
                 );
 
                 let full_trace = VmTrace { steps, sources };
-                output_execution_trace(full_trace, entry_address);
+                output_execution_trace(full_trace, entry_address, test_name);
             }
         },
         VmTracingOptions::ManualVerbose => {
@@ -962,6 +965,7 @@ mod test {
         let assembly = Assembly::try_from(FIB_ASSEMBLY.to_owned()).unwrap();
 
         let snapshot = block_on(run_vm(
+            "manual".to_owned(),
             assembly.clone(),
             vec![],
             HashMap::new(),

@@ -589,6 +589,7 @@ pub(crate) fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_tex
     use futures::executor::block_on;
     let assembly = Assembly::try_from(assembly_text.to_owned()).unwrap();
     let snapshot = block_on(run_vm(
+        "manual".to_owned(),
         assembly.clone(),
         calldata,
         HashMap::new(),
