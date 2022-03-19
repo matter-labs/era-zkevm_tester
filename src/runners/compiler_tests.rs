@@ -1,6 +1,7 @@
 use super::*;
 
 use crate::default_environment::*;
+use crate::utils::IntoFixedLengthByteIterator;
 use crate::{Address, H256, U256};
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -177,6 +178,10 @@ pub(crate) fn dump_memory_page_using_abi(
     let length = r2.0[0] as usize;
     assert!(offset < (1u32 << 24) as usize);
     assert!(length < (1u32 << 24) as usize);
+    let mut dump = Vec::with_capacity(length);
+    if length == 0 {
+        return dump;
+    }
 
     let first_word = offset / 32;
     let end_byte = offset + length;
@@ -185,41 +190,30 @@ pub(crate) fn dump_memory_page_using_abi(
         last_word += 1;
     }
 
-    let mut page_part = memory.dump_page_content(page, (first_word as u32)..(last_word as u32));
-    let mut dump = Vec::with_capacity(length);
-    if length == 0 {
-        return dump;
-    }
+    let unalignment = offset % 32;
 
-    let mut drain = page_part.drain(..);
+    let page_part = memory.dump_page_content_as_u256_words(page, (first_word as u32)..(last_word as u32));
 
-    if first_word == last_word {
-        // we dump word or less
-
-        if let Some(first) = drain.next() {
-            let offset_bytes = offset % 32;
-            let end = end_byte % 32;
-            dump.extend_from_slice(&first[offset_bytes..end]);
-        }
-
-        assert_eq!(dump.len(), length, "tried to dump with offset {}, length {}, got a bytestring of length {}", offset, length, dump.len());
-
-        return dump;
-    }
-
-    if let Some(first) = drain.next() {
-        let offset_bytes = offset % 32;
-        dump.extend_from_slice(&first[offset_bytes..]);
-    }
-
-    let num_remaining = drain.len();
-
-    for (i, el) in drain.enumerate() {
-        if i != num_remaining - 1 {
-            dump.extend_from_slice(&el);
+    let mut is_first = true;
+    let mut remaining = length;
+    for word in page_part.into_iter() {
+        let mut it = word.into_be_iter();
+        if is_first {
+            is_first = false;
+            let mut it = it.skip(unalignment);
+            while let Some(next) = it.next() {
+                if remaining > 0 {
+                    dump.push(next);
+                    remaining -= 1;
+                }
+            }
         } else {
-            let bytes_to_take = end_byte % 32;
-            dump.extend_from_slice(&el[..bytes_to_take]);
+            while let Some(next) = it.next() {
+                if remaining > 0 {
+                    dump.push(next);
+                    remaining -= 1;
+                }
+            }
         }
     }
 
@@ -906,105 +900,4 @@ pub fn set_tracing_mode(value: VmTracingOptions) {
 
 pub fn get_tracing_mode() -> VmTracingOptions {
     VmTracingOptions::from_u64(TRACE_MODE.load(std::sync::atomic::Ordering::Relaxed))
-}
-
-#[cfg(test)]
-mod test {
-
-    use super::*;
-
-    pub(crate) const FIB_ASSEMBLY: &'static str = r#"
-        .text
-        .file    "fib.ll"
-        .rodata.cst32
-        .p2align    5                               ; -- Begin function fn_fib
-    CPI0_0:
-        .cell -57896044618658097711785492504343953926634992332820282019728792003956564819968
-        .text
-        .globl    fn_fib
-    fn_fib:                                 ; @fn_fib
-    ; %bb.0:                                ; %fn_fib_entry
-        nop stack+=[6]
-        add    r1, r0, r2
-        add    @CPI0_0[0], r0, r1
-        add    0, r0, r4
-        add.gt    r1, r0, r4
-        add    0, 0, r3
-        add    0, r0, r5
-        add.lt    r1, r0, r5
-        add.eq    r5, r0, r4
-        sub!    r4, r3, r4
-        jump.ne    @.BB0_2
-    ; %bb.1:                                ; %fn_fib_entry.if
-        add    1, 0, r4
-        sub!    r2, r4, r4
-        and    r2, r1, r2
-        sub!    r2, r3, r3
-        sub!    r2, r1, r1
-        add    1, 0, r1
-        nop stack-=[6]
-        ret
-    .BB0_2:                                 ; %fn_fib_entry.endif
-        sub.s    1, r2, r1
-        call    @fn_fib
-        add    r1, r0, r3
-        sub.s    2, r2, r1
-        call    @fn_fib
-        add    r3, r1, r1
-        nop stack-=[6]
-        ret
-                                            ; -- End function
-        .note.GNU-stack
-        "#;
-
-    #[test]
-    fn test_fib() {
-        use futures::executor::block_on;
-        set_tracing_mode(VmTracingOptions::ManualVerbose);
-
-        let assembly = Assembly::try_from(FIB_ASSEMBLY.to_owned()).unwrap();
-
-        let snapshot = block_on(run_vm(
-            "manual".to_owned(),
-            assembly.clone(),
-            vec![],
-            HashMap::new(),
-            vec![U256::from_dec_str("5").unwrap()],
-            None,
-            VmLaunchOption::Default,
-            11,
-            u16::MAX as usize,
-            vec![assembly.clone()],
-            vec![],
-            HashMap::new(),
-        ));
-
-        let VmSnapshot {
-            registers,
-            flags,
-            timestamp,
-            memory_page_counter,
-            tx_number_in_block,
-            previous_pc,
-            did_call_or_ret_recently,
-            tx_origin,
-            calldata_area_dump,
-            returndata_area_dump,
-            execution_has_ended,
-            stack_dump,
-            heap_dump,
-            storage,
-            deployed_contracts,
-            execution_result,
-            returndata_bytes,
-            events,
-            to_l1_messages,
-            raw_events,
-            ..
-        } = snapshot;
-        dbg!(execution_has_ended);
-        dbg!(execution_result);
-        dbg!(registers);
-        dbg!(events);
-    }
 }

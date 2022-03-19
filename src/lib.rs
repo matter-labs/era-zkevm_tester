@@ -13,10 +13,8 @@ use zk_evm::witness_trace::DummyTracer;
 use zkevm_assembly::Assembly;
 
 pub mod default_environment;
-// pub mod runner;
-
 pub mod runners;
-
 pub mod trace;
+mod utils;
 
 mod tests;
