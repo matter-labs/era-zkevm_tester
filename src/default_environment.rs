@@ -88,7 +88,7 @@ pub fn create_vm_with_default_settings<'a, const B: bool>(
     };
 
     // we consider the tested code as a bootloader
-    vm.push_bootloader_context(bootloader_context);
+    vm.push_bootloader_context(0, bootloader_context);
     vm.local_state.timestamp = INITIAL_TIMESTAMP;
     vm.local_state.memory_page_counter = INITIAL_MEMORY_COUNTER;
 

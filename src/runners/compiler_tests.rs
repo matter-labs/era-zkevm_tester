@@ -472,7 +472,7 @@ pub fn create_vm<'a, const B: bool>(
     };
 
     // we consider the tested code as a bootloader
-    vm.push_bootloader_context(initial_context);
+    vm.push_bootloader_context(0, initial_context);
     vm.local_state.timestamp = INITIAL_TIMESTAMP;
     vm.local_state.memory_page_counter = INITIAL_MEMORY_COUNTER;
     vm.local_state.tx_number_in_block = context.transaction_index as u16;
