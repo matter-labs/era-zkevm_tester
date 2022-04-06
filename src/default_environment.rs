@@ -36,12 +36,13 @@ pub fn create_default_block_properties() -> BlockProperties {
         default_aa_code_hash: U256::zero(),
         block_number: 1u64,
         block_timestamp: 123456789u64,
-        coinbase: Address::zero(),
+        // coinbase: Address::zero(),
         // pubdata_byte_price_in_ergs: 1,
         // storage_cold_access_price_in_ergs: 100,
-        storage_warm_access_refund_in_ergs: 1,
+        // storage_warm_access_refund_in_ergs: 1,
+        ergs_per_code_decommittment_word: 1,
         ergs_per_pubdata_byte_limit_in_block: 50,
-        storage_write_price_in_ergs: 1000,
+        // storage_write_price_in_ergs: 1000,
         zkporter_is_available: true,
     }
 }

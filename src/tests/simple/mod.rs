@@ -3,6 +3,7 @@ use super::*;
 mod add;
 mod uma;
 mod debug;
+mod ret;
 
 use zkevm_assembly::Assembly;
 use std::collections::HashMap;
@@ -30,5 +31,5 @@ pub(crate) fn run_for_result_only(assembly_text: &str) {
     ));
 
     assert!(snapshot.execution_has_ended);
-    assert!(matches!(snapshot.execution_result, VmExecutionResult::Ok(..)));
+    assert!(matches!(snapshot.execution_result, VmExecutionResult::Ok(..)), "expected execution result Ok, found {:?}", snapshot.execution_result);
 }
