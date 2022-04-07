@@ -5,6 +5,8 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use zk_evm::zkevm_opcode_defs::{Opcode, REGISTERS_COUNT};
 
+use crate::runners::compiler_tests::VmTracingOptions;
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ContractSourceDebugInfo {
     pub assembly_code: String,
@@ -636,6 +638,8 @@ pub(crate) fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_tex
 
 #[cfg(test)]
 mod test {
+    use crate::runners::compiler_tests::set_tracing_mode;
+
     use super::*;
 
     // const SIMPLE_ASSEMBLY: &'static str = r#"
@@ -1387,6 +1391,648 @@ __entry:
     #[test]
     fn run_parse_manual_default_unwind() {
         run_inner(hex::decode("").unwrap(), VmLaunchOption::Default, MANUAL_DEFAULT_UNWIND_LABEL_ACCESS);
+    }
+
+    const ENSURE_PROPER_RETURN_ON_REVERT: &'static str = r#"
+            .text
+            .file	"Test_73"
+            .globl	__entry
+        __entry:
+        .func_begin0:
+            add	r1, r0, r4
+            add	@CPI0_0[0], r0, r1
+            uma.heap_write	r1, r4, r0
+            add	@CPI0_1[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            and	1, r3, r1
+            add	0, r0, r2
+            sub!	r1, r2, r1
+            jump.ne	@.BB0_4
+            jump	@.BB0_5
+        .BB0_2:
+        .tmp4:
+            add	@CPI0_2[0], r0, r1
+            uma.heap_read	r1, r0, r1
+            add	1, r0, r2
+            sub!	r1, r2, r1
+            jump.ne	@.BB0_9
+            jump	@.BB0_3
+        .BB0_3:
+            add	@CPI0_0[0], r0, r1
+            uma.heap_read	r1, r0, r1
+            add	@CPI0_1[0], r0, r2
+            uma.heap_read	r2, r0, r2
+            shl.s	32, r2, r2
+            add	r1, r2, r1
+            ret
+        .BB0_4:
+        .tmp2:
+            near_call	r0, @__constructor, @.BB0_2
+        .tmp3:
+            jump	@.BB0_6
+        .BB0_5:
+        .tmp0:
+            near_call	r0, @__selector, @.BB0_2
+        .tmp1:
+            jump	@.BB0_7
+        .BB0_6:
+            jump	@.BB0_3
+        .BB0_7:
+            jump	@.BB0_3
+        .BB0_9:
+            add	@CPI0_0[0], r0, r1
+            uma.heap_read	r1, r0, r1
+            add	@CPI0_1[0], r0, r2
+            uma.heap_read	r2, r0, r2
+            shl.s	32, r2, r2
+            add	r1, r2, r1
+            add	0, r0, r3
+            add	r3, r0, r2
+            near_call	r0, @__cxa_throw, @DEFAULT_UNWIND
+        .func_end0:
+
+        __constructor:
+        .func_begin1:
+            nop	stack+=[8]
+            add	128, r0, stack-[8]
+            add	stack-[8], r0, r2
+            add	64, r0, r1
+            uma.heap_write	r1, r2, r0
+            add	0, r0, r1
+            sub!	r1, r1, r1
+            jump.ne	@.BB1_4
+            jump	@.BB1_5
+        .BB1_1:
+            add	0, r0, r3
+            add	r3, r0, r1
+            add	r3, r0, r2
+            near_call	r0, @__cxa_throw, @DEFAULT_UNWIND
+        .BB1_3:
+            nop	stack-=[8]
+            ret
+        .BB1_4:
+            add	0, r0, r2
+            add	@CPI1_0[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            add	@CPI1_2[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            jump	@.BB1_1
+        .BB1_5:
+            add	0, r0, stack-[7]
+            add	stack-[8], r0, r2
+            add	r2, r0, stack-[0]
+            add	stack-[7], r0, r1
+            add	@CPI1_0[0], r0, r3
+            uma.heap_read	r3, r0, r3
+            add	r2, r3, r2
+            add	r2, r0, stack-[1]
+            shr.s	5, r1, r2
+            add	r2, r0, stack-[2]
+            and	31, r1, r3
+            add	r3, r0, stack-[3]
+            and	@CPI1_1[0], r1, r1
+            add	r1, r0, stack-[4]
+            add	0, r0, r1
+            sub!	r2, r1, r2
+            add	r1, r0, stack-[5]
+            jump.eq	@.BB1_9
+            jump	@.BB1_6
+        .BB1_6:
+            add	stack-[5], 0, r1
+            add	stack-[2], 0, r2
+            add	stack-[0], 0, r3
+            add	stack-[1], 0, r4
+            shl.s	5, r1, r5
+            add	r4, r5, r4
+            uma.calldata_read	r4, r0, r4
+            add	r3, r5, r3
+            uma.heap_write	r3, r4, r0
+            add	1, r1, r1
+            sub!	r1, r2, r2
+            add	r1, r0, stack-[5]
+            jump.lt	@.BB1_6
+            jump	@.BB1_9
+        .BB1_7:
+            add	stack-[0], 0, r1
+            add	stack-[4], 0, r3
+            add	stack-[3], 0, r4
+            add	stack-[1], 0, r2
+            add	r2, r3, r2
+            uma.calldata_read	r2, r0, r2
+            shl.s	3, r4, r4
+            sub	256, r4, r5
+            shr	r2, r5, r2
+            shl	r2, r5, r2
+            add	r1, r3, r1
+            uma.heap_read	r1, r0, r3
+            shl	r3, r4, r3
+            shr	r3, r4, r3
+            or	r2, r3, r2
+            uma.heap_write	r1, r2, r0
+            jump	@.BB1_8
+        .BB1_8:
+            add	stack-[8], r0, r3
+            add	stack-[7], r0, r2
+            add	@CPI1_0[0], r0, r1
+            uma.heap_write	r1, r3, r0
+            add	@CPI1_2[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            jump	@.BB1_3
+        .BB1_9:
+            add	stack-[3], 0, r1
+            add	0, r0, r2
+            sub!	r1, r2, r1
+            jump.ne	@.BB1_7
+            jump	@.BB1_8
+        .func_end1:
+
+        __selector:
+        .func_begin2:
+            nop	stack+=[14]
+            add	128, r0, stack-[14]
+            add	stack-[14], r0, r2
+            add	64, r0, r1
+            uma.heap_write	r1, r2, r0
+            add	@CPI2_0[0], r0, r1
+            uma.heap_read	r1, r0, r1
+            add	4, r0, r2
+            sub!	r1, r2, r1
+            add	0, r0, r1
+            add.lt	1, r0, r1
+            and	1, r1, r1
+            add	0, r0, r2
+            sub!	r1, r2, r1
+            add	0, r0, r1
+            add.eq	1, r0, r1
+            and	1, r1, r1
+            sub!	r1, r2, r1
+            jump.ne	@.BB2_4
+            jump	@.BB2_5
+        .BB2_1:
+            add	0, r0, r3
+            add	r3, r0, r1
+            add	r3, r0, r2
+            near_call	r0, @__cxa_throw, @DEFAULT_UNWIND
+        .BB2_2:
+        .tmp11:
+            add	0, r0, r3
+            add	r3, r0, r1
+            add	r3, r0, r2
+            near_call	r0, @__cxa_throw, @DEFAULT_UNWIND
+        .BB2_3:
+            nop	stack-=[14]
+            ret
+        .BB2_4:
+            add	0, r0, stack-[13]
+            jump	@.BB2_7
+        .BB2_5:
+            add	0, r0, r2
+            add	@CPI2_1[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            add	@CPI2_0[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            jump	@.BB2_1
+        .BB2_6:
+            jump	@.BB2_5
+        .BB2_7:
+            add	stack-[13], r0, r1
+            add	@CPI2_1[0], r0, r2
+            uma.heap_read	r2, r0, r2
+            add	r1, r2, r1
+            uma.calldata_read	r1, r0, r1
+            add	r1, r0, stack-[5]
+            add	0, r0, r1
+            sub!	r1, r1, r1
+            jump.ne	@.BB2_14
+            jump	@.BB2_15
+        .BB2_8:
+            add	0, r0, r2
+            add	1, r0, r1
+            sub!	r1, r2, r1
+            jump.ne	@.BB2_10
+            jump	@.BB2_9
+        .BB2_9:
+            add	stack-[13], r0, r2
+            add	@CPI2_1[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            add	@CPI2_0[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            jump	@.BB2_1
+        .BB2_10:
+            add	@CPI2_0[0], r0, r1
+            uma.heap_read	r1, r0, r1
+        .tmp9:
+            near_call	r0, @abi_decode_bool, @.BB2_2
+        .tmp10:
+            add	r1, r0, stack-[4]
+            jump	@.BB2_11
+        .BB2_11:
+            add	stack-[4], 0, r1
+            add	0, r0, r2
+            sub!	r1, r2, r1
+            jump.eq	@.BB2_13
+            jump	@.BB2_12
+        .BB2_12:
+            add	stack-[13], r0, r2
+            add	@CPI2_1[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            add	@CPI2_0[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            jump	@.BB2_1
+        .BB2_13:
+            add	stack-[14], r0, r1
+            add	5, r0, r2
+            uma.heap_write	r1, r2, r0
+            add	stack-[14], r0, r2
+            add	@CPI2_1[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            add	32, r0, r2
+            add	@CPI2_0[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            jump	@.BB2_3
+        .BB2_14:
+            add	0, r0, stack-[12]
+            jump	@.BB2_16
+        .BB2_15:
+            add	stack-[5], 0, r1
+            shr.s	224, r1, stack-[12]
+            jump	@.BB2_16
+        .BB2_16:
+            add	stack-[12], r0, r2
+            add	@CPI2_2[0], r0, r1
+            sub!	r1, r2, r1
+            jump.eq	@.BB2_8
+            jump	@.BB2_17
+        .BB2_17:
+            add	stack-[13], r0, r1
+            add	@CPI2_1[0], r0, r2
+            uma.heap_read	r2, r0, r2
+            add	r1, r2, r1
+            uma.calldata_read	r1, r0, r1
+            add	r1, r0, stack-[3]
+            add	0, r0, r1
+            sub!	r1, r1, r1
+            jump.ne	@.BB2_27
+            jump	@.BB2_28
+        .BB2_18:
+            add	0, r0, r2
+            add	1, r0, r1
+            sub!	r1, r2, r1
+            jump.ne	@.BB2_20
+            jump	@.BB2_19
+        .BB2_19:
+            add	stack-[13], r0, r2
+            add	@CPI2_1[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            add	@CPI2_0[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            jump	@.BB2_1
+        .BB2_20:
+            add	@CPI2_0[0], r0, r1
+            uma.heap_read	r1, r0, r1
+        .tmp7:
+            near_call	r0, @abi_decode_bool, @.BB2_2
+        .tmp8:
+            add	r1, r0, stack-[2]
+            jump	@.BB2_21
+        .BB2_21:
+            add	stack-[2], 0, r1
+            add	0, r0, r2
+            sub!	r1, r2, r1
+            jump.eq	@.BB2_23
+            jump	@.BB2_22
+        .BB2_22:
+            add	64, r0, r1
+            uma.heap_read	r1, r0, r1
+            add	r1, r0, stack-[10]
+            add	stack-[10], r0, r1
+            add	r1, r0, stack-[1]
+            add	0, r0, r1
+            sub!	r1, r1, r1
+            jump.ne	@.BB2_24
+            jump	@.BB2_25
+        .BB2_23:
+            add	64, r0, r1
+            uma.heap_read	r1, r0, r1
+            add	r1, r0, stack-[8]
+            add	stack-[8], r0, r1
+            add	5, r0, r2
+            uma.heap_write	r1, r2, r0
+            add	stack-[8], r0, r2
+            add	@CPI2_1[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            add	32, r0, r2
+            add	@CPI2_0[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            jump	@.BB2_3
+        .BB2_24:
+            add	0, r0, stack-[9]
+            jump	@.BB2_26
+        .BB2_25:
+            add	@CPI2_5[0], r0, r1
+            add	r1, r0, stack-[9]
+            jump	@.BB2_26
+        .BB2_26:
+            add	stack-[1], 0, r1
+            add	stack-[9], r0, r2
+            uma.heap_write	r1, r2, r0
+            add	stack-[10], r0, r1
+            add	4, r1, r1
+            add	32, r0, r2
+            uma.heap_write	r1, r2, r0
+            add	stack-[10], r0, r1
+            add	36, r1, r1
+            add	5, r0, r2
+            uma.heap_write	r1, r2, r0
+            add	stack-[10], r0, r1
+            add	68, r1, r1
+            add	@CPI2_6[0], r0, r2
+            uma.heap_write	r1, r2, r0
+            add	stack-[10], r0, r2
+            add	@CPI2_1[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            add	100, r0, r2
+            add	@CPI2_0[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            jump	@.BB2_1
+        .BB2_27:
+            add	0, r0, stack-[11]
+            jump	@.BB2_29
+        .BB2_28:
+            add	stack-[3], 0, r1
+            shr.s	224, r1, stack-[11]
+            jump	@.BB2_29
+        .BB2_29:
+            add	stack-[11], r0, r2
+            add	@CPI2_3[0], r0, r1
+            sub!	r1, r2, r1
+            jump.eq	@.BB2_18
+            jump	@.BB2_30
+        .BB2_30:
+            add	stack-[13], r0, r1
+            add	@CPI2_1[0], r0, r2
+            uma.heap_read	r2, r0, r2
+            add	r1, r2, r1
+            uma.calldata_read	r1, r0, r1
+            add	r1, r0, stack-[0]
+            add	0, r0, r1
+            sub!	r1, r1, r1
+            jump.ne	@.BB2_33
+            jump	@.BB2_34
+        .BB2_31:
+        .tmp5:
+            near_call	r0, @external_fun_with_empty_message, @.BB2_2
+        .tmp6:
+            jump	@.BB2_32
+        .BB2_32:
+            jump	@.BB2_6
+        .BB2_33:
+            add	0, r0, stack-[7]
+            jump	@.BB2_35
+        .BB2_34:
+            add	stack-[0], 0, r1
+            shr.s	224, r1, stack-[7]
+            jump	@.BB2_35
+        .BB2_35:
+            add	stack-[7], r0, r2
+            add	@CPI2_4[0], r0, r1
+            sub!	r1, r2, r1
+            jump.eq	@.BB2_31
+            jump	@.BB2_36
+        .BB2_36:
+            jump	@.BB2_6
+        .func_end2:
+
+        abi_decode_bool:
+        .func_begin3:
+            nop	stack+=[3]
+            add	0, r0, stack-[3]
+            add	r1, r0, stack-[2]
+            add	stack-[2], r0, r1
+            add	@CPI3_0[0], r1, r2
+            add	32, r0, r1
+            add	@CPI3_1[0], r0, r5
+            sub!	r2, r1, r1
+            add	0, r0, r1
+            add.lt	r5, r0, r1
+            and	r2, r5, r4
+            add	0, r0, r2
+            sub!	r4, r2, r3
+            add	0, r0, r3
+            add.gt	r5, r0, r3
+            sub!	r4, r5, r4
+            add	r1, r0, r1
+            add.eq	r3, r0, r1
+            sub!	r1, r2, r1
+            add	0, r0, r1
+            add.ne	1, r0, r1
+            and	1, r1, r1
+            sub!	r1, r2, r1
+            jump.ne	@.BB3_4
+            jump	@.BB3_5
+        .BB3_1:
+            add	0, r0, r3
+            add	r3, r0, r1
+            add	r3, r0, r2
+            near_call	r0, @__cxa_throw, @DEFAULT_UNWIND
+        .BB3_3:
+            add	stack-[3], r0, r1
+            nop	stack-=[3]
+            ret
+        .BB3_4:
+            add	0, r0, r2
+            add	@CPI3_2[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            add	@CPI3_3[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            jump	@.BB3_1
+        .BB3_5:
+            add	@CPI3_2[0], r0, r1
+            uma.heap_read	r1, r0, r1
+            add	4, r1, r1
+            uma.calldata_read	r1, r0, r1
+            add	r1, r0, stack-[1]
+            add	stack-[1], r0, r1
+            add	0, r0, r2
+            sub!	r1, r2, r3
+            add	0, r0, r3
+            add.eq	1, r0, r3
+            and	1, r3, r3
+            sub!	r3, r2, r3
+            add	0, r0, r3
+            add.eq	1, r0, r3
+            and	1, r3, r3
+            sub!	r1, r3, r1
+            add	0, r0, r1
+            add.eq	1, r0, r1
+            and	1, r1, r1
+            sub!	r1, r2, r1
+            add	0, r0, r1
+            add.eq	1, r0, r1
+            and	1, r1, r1
+            sub!	r1, r2, r1
+            jump.eq	@.BB3_7
+            jump	@.BB3_6
+        .BB3_6:
+            add	0, r0, r2
+            add	@CPI3_2[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            add	@CPI3_3[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            jump	@.BB3_1
+        .BB3_7:
+            add	stack-[1], r0, r1
+            add	r1, r0, stack-[3]
+            jump	@.BB3_3
+        .func_end3:
+
+        external_fun_with_empty_message:
+        .func_begin4:
+            nop	stack+=[5]
+            add	0, r0, r1
+            sub!	r1, r1, r1
+            jump.ne	@.BB4_4
+            jump	@.BB4_5
+        .BB4_1:
+            add	0, r0, r3
+            add	r3, r0, r1
+            add	r3, r0, r2
+            near_call	r0, @__cxa_throw, @DEFAULT_UNWIND
+        .BB4_2:
+        .tmp14:
+            add	0, r0, r3
+            add	r3, r0, r1
+            add	r3, r0, r2
+            near_call	r0, @__cxa_throw, @DEFAULT_UNWIND
+        .BB4_4:
+            add	0, r0, r2
+            add	@CPI4_1[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            add	@CPI4_0[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            jump	@.BB4_1
+        .BB4_5:
+            add	@CPI4_0[0], r0, r1
+            uma.heap_read	r1, r0, r1
+        .tmp12:
+            near_call	r0, @abi_decode_bool, @.BB4_2
+        .tmp13:
+            add	r1, r0, stack-[1]
+            jump	@.BB4_6
+        .BB4_6:
+            add	stack-[1], 0, r1
+            add	0, r0, r2
+            sub!	r1, r2, r1
+            jump.eq	@.BB4_8
+            jump	@.BB4_7
+        .BB4_7:
+            add	64, r0, r1
+            uma.heap_read	r1, r0, r1
+            add	r1, r0, stack-[5]
+            add	stack-[5], r0, r1
+            add	r1, r0, stack-[0]
+            add	0, r0, r1
+            sub!	r1, r1, r1
+            jump.ne	@.BB4_9
+            jump	@.BB4_10
+        .BB4_8:
+            add	64, r0, r1
+            uma.heap_read	r1, r0, r1
+            add	r1, r0, stack-[3]
+            add	stack-[3], r0, r1
+            add	5, r0, r2
+            uma.heap_write	r1, r2, r0
+            add	stack-[3], r0, r2
+            add	@CPI4_1[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            add	32, r0, r2
+            add	@CPI4_0[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            add	1, r0, r2
+            add	@CPI4_2[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            jump	@.BB4_1
+        .BB4_9:
+            add	0, r0, stack-[4]
+            jump	@.BB4_11
+        .BB4_10:
+            add	@CPI4_3[0], r0, r1
+            add	r1, r0, stack-[4]
+            jump	@.BB4_11
+        .BB4_11:
+            add	stack-[0], 0, r1
+            add	stack-[4], r0, r2
+            uma.heap_write	r1, r2, r0
+            add	stack-[5], r0, r1
+            add	4, r1, r1
+            add	32, r0, r2
+            uma.heap_write	r1, r2, r0
+            add	stack-[5], r0, r1
+            add	36, r1, r1
+            add	0, r0, r2
+            uma.heap_write	r1, r2, r0
+            add	stack-[5], r0, r2
+            add	@CPI4_1[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            add	68, r0, r2
+            add	@CPI4_0[0], r0, r1
+            uma.heap_write	r1, r2, r0
+            jump	@.BB4_1
+        .func_end4:
+
+        __cxa_throw:
+            revert
+
+            .note.GNU-stack
+            .rodata
+        CPI0_0:
+            .cell 16777184
+        CPI0_1:
+            .cell 16777152
+        CPI0_2:
+            .cell 16777120
+        CPI1_0:
+            .cell 16777184
+        CPI1_1:
+            .cell -32
+        CPI1_2:
+            .cell 16777152
+        CPI2_0:
+            .cell 16777152
+        CPI2_1:
+            .cell 16777184
+        CPI2_2:
+            .cell 1559963207
+        CPI2_3:
+            .cell 2109228076
+        CPI2_4:
+            .cell 3138363696
+        CPI2_5:
+            .cell 3963877391197344453575983046348115674221700746820753546331534351508065746944
+        CPI2_6:
+            .cell 31411796921273332039540167021977234770400022203154653039219347659833896599552
+        CPI3_0:
+            .cell -4
+        CPI3_1:
+            .cell -57896044618658097711785492504343953926634992332820282019728792003956564819968
+        CPI3_2:
+            .cell 16777184
+        CPI3_3:
+            .cell 16777152
+        CPI4_0:
+            .cell 16777152
+        CPI4_1:
+            .cell 16777184
+        CPI4_2:
+            .cell 16777120
+        CPI4_3:
+            .cell 3963877391197344453575983046348115674221700746820753546331534351508065746944
+    "#;
+
+    #[test]
+    fn run_returndata_on_revert() {
+        set_tracing_mode(VmTracingOptions::ManualVerbose);
+        run_inner(hex::decode("bb0fa1300000000000000000000000000000000000000000000000000000000000000001").unwrap(), VmLaunchOption::Default, ENSURE_PROPER_RETURN_ON_REVERT);
     }
 }
 

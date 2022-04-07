@@ -5,6 +5,7 @@ use crate::utils::IntoFixedLengthByteIterator;
 use crate::{Address, H256, U256};
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::ops::Add;
 use std::sync::atomic::AtomicU64;
 use zk_evm::aux_structures::*;
 use zk_evm::block_properties::*;
@@ -276,6 +277,10 @@ pub struct RawInMemoryStorage {
     pub factory_deps: HashMap<H256, Vec<u8>>,
 }
 
+pub fn default_entry_point_contract_address() -> Address {
+    Address::from_low_u64_be(1234567u64)
+}
+
 ///
 /// Used for testing the compiler with a single contract.
 ///
@@ -294,23 +299,16 @@ pub async fn run_vm(
     known_bytecodes: Vec<Vec<[u8; 32]>>,
     factory_deps: HashMap<H256, Vec<[u8; 32]>>,
 ) -> VmSnapshot {
-    // println!(
-    //     "Running single instance with calldata {} and initial registers: {:?}",
-    //     hex::encode(&calldata),
-    //     registers
-    //         .iter()
-    //         .map(|el| format!("0x{:x}", el))
-    //         .collect::<Vec<_>>(),
-    // );
+    let entry_address = default_entry_point_contract_address();
     let mut contracts: HashMap<Address, Assembly> = HashMap::new();
-    contracts.insert(Address::default(), assembly);
+    contracts.insert(entry_address, assembly);
     run_vm_multi_contracts(
         test_name,
         contracts,
         calldata,
         storage,
         registers,
-        Address::default(),
+        entry_address,
         context,
         vm_launch_option,
         cycles_limit,
@@ -372,10 +370,12 @@ pub fn create_vm<'a, const B: bool>(
     >,
     HashMap<U256, Assembly>,
 ) {
+    use zk_evm::utils::bytecode_to_code_hash;
     // fill the decommitter and storage slots with contract codes, etc
 
     // first deployed contracts. Those are stored under DEPLOYER_CONTRACT as raw address -> hash
     let mut storage_els = vec![];
+
     let mut factory_deps: HashMap<U256, Vec<U256>> = factory_deps
         .into_iter()
         .map(|(k, v)| {
@@ -393,42 +393,39 @@ pub fn create_vm<'a, const B: bool>(
             .clone()
             .compile_to_bytecode()
             .expect("must compile an assembly");
-        let bytecode_hash = hash_contract_code(&bytecode);
-        // let mut buffer = [0u8; 32];
-        // buffer[12..].copy_from_slice(&address.as_bytes());
-        // let key = U256::from_big_endian(&buffer);
-        let key = U256::from_big_endian(&address.as_bytes());
-        let value = U256::from_big_endian(bytecode_hash.as_bytes());
+        let bytecode_hash = bytecode_to_code_hash(&bytecode).unwrap();
+        let address_as_u256 = U256::from_big_endian(&address.as_bytes());
+        let bytecode_hash_as_u256 = U256::from_big_endian(&bytecode_hash);
 
-        reverse_lookup_for_assembly.insert(value, assembly.clone());
+        reverse_lookup_for_assembly.insert(bytecode_hash_as_u256, assembly.clone());
 
         // add to decommitter
         let bytecode_words = contract_bytecode_to_words(bytecode);
-        let _existing = factory_deps.insert(value, bytecode_words);
+        let _existing = factory_deps.insert(bytecode_hash_as_u256, bytecode_words);
 
         // we write into DEPLOYER that for key == address we have bytecode == bytecode hash
-        storage_els.push((0, *DEPLOYER_SYSTEM_CONTRACT_ADDRESS, key, value));
+        storage_els.push((0, *DEPLOYER_SYSTEM_CONTRACT_ADDRESS, address_as_u256, bytecode_hash_as_u256));
         // we write into FACTORY that for key == bytecode hash we have marker to know it
-        storage_els.push((0, *KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS, value, U256::from_dec_str("1").unwrap()));
+        storage_els.push((0, *KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS, bytecode_hash_as_u256, U256::from_dec_str("1").unwrap()));
     }
 
     for assembly in known_contracts.into_iter() {
         let bytecode = assembly
             .compile_to_bytecode()
             .expect("must compile an assembly");
-        let bytecode_hash = hash_contract_code(&bytecode);
+        let bytecode_hash = bytecode_to_code_hash(&bytecode).unwrap();
         let bytecode_words = contract_bytecode_to_words(bytecode);
         let _ = factory_deps.insert(
-            U256::from_big_endian(bytecode_hash.as_bytes()),
+            U256::from_big_endian(&bytecode_hash),
             bytecode_words,
         );
     }
 
     for bytecode in known_bytecodes.into_iter() {
-        let bytecode_hash = hash_contract_code(&bytecode);
+        let bytecode_hash = bytecode_to_code_hash(&bytecode).unwrap();
         let bytecode_words = contract_bytecode_to_words(bytecode);
         let _ = factory_deps.insert(
-            U256::from_big_endian(bytecode_hash.as_bytes()),
+            U256::from_big_endian(&bytecode_hash),
             bytecode_words,
         );
     }

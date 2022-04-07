@@ -4,6 +4,7 @@ mod add;
 mod uma;
 mod debug;
 mod ret;
+mod external;
 
 use zkevm_assembly::Assembly;
 use std::collections::HashMap;
