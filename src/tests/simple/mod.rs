@@ -1,15 +1,15 @@
 use super::*;
 
 mod add;
-mod uma;
 mod debug;
-mod ret;
 mod external;
+mod ret;
+mod uma;
 
-use zkevm_assembly::Assembly;
-use std::collections::HashMap;
 use crate::runners::compiler_tests::VmLaunchOption;
 use crate::runners::compiler_tests::VmTracingOptions;
+use std::collections::HashMap;
+use zkevm_assembly::Assembly;
 
 pub(crate) fn run_for_result_only(assembly_text: &str) {
     use crate::runners::compiler_tests::*;
@@ -32,5 +32,9 @@ pub(crate) fn run_for_result_only(assembly_text: &str) {
     ));
 
     assert!(snapshot.execution_has_ended);
-    assert!(matches!(snapshot.execution_result, VmExecutionResult::Ok(..)), "expected execution result Ok, found {:?}", snapshot.execution_result);
+    assert!(
+        matches!(snapshot.execution_result, VmExecutionResult::Ok(..)),
+        "expected execution result Ok, found {:?}",
+        snapshot.execution_result
+    );
 }

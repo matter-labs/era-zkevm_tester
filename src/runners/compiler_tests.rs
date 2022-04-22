@@ -1,6 +1,8 @@
 use super::*;
 
 use crate::default_environment::*;
+use crate::runners::events::SolidityLikeEvent;
+use crate::runners::simple_witness_tracer::MemoryLogWitnessTracer;
 use crate::utils::IntoFixedLengthByteIterator;
 use crate::{Address, H256, U256};
 use std::collections::HashMap;
@@ -9,17 +11,17 @@ use std::ops::Add;
 use std::sync::atomic::AtomicU64;
 use zk_evm::aux_structures::*;
 use zk_evm::block_properties::*;
-use crate::runners::events::SolidityLikeEvent;
 use zk_evm::opcodes::execution::ret::*;
-use zk_evm::precompiles::{DefaultPrecompilesProcessor, KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS};
 use zk_evm::precompiles::DEPLOYER_SYSTEM_CONTRACT_ADDRESS;
+use zk_evm::precompiles::{
+    DefaultPrecompilesProcessor, KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
+};
 use zk_evm::testing::decommitter::SimpleDecommitter;
-use zk_evm::testing::event_sink::{InMemoryEventSink, EventMessage};
+use zk_evm::testing::event_sink::{EventMessage, InMemoryEventSink};
 use zk_evm::testing::memory::SimpleMemory;
 use zk_evm::testing::storage::InMemoryStorage;
 use zk_evm::vm_state::*;
 use zkevm_assembly::Assembly;
-use crate::runners::simple_witness_tracer::MemoryLogWitnessTracer;
 
 use sha2::{Digest, Sha256};
 
@@ -42,11 +44,11 @@ pub enum VmExecutionResult {
 
 #[derive(Debug, Default)]
 pub struct VmExecutionContext {
-    this_address: Address,
-    msg_sender: Address,
-    block_number: u64,
-    transaction_index: u32,
-    block_timestamp: u64,
+    pub this_address: Address,
+    pub msg_sender: Address,
+    pub block_number: u64,
+    pub transaction_index: u32,
+    pub block_timestamp: u64,
 }
 
 impl VmExecutionContext {
@@ -193,7 +195,8 @@ pub(crate) fn dump_memory_page_using_abi(
 
     let unalignment = offset % 32;
 
-    let page_part = memory.dump_page_content_as_u256_words(page, (first_word as u32)..(last_word as u32));
+    let page_part =
+        memory.dump_page_content_as_u256_words(page, (first_word as u32)..(last_word as u32));
 
     let mut is_first = true;
     let mut remaining = length;
@@ -218,7 +221,14 @@ pub(crate) fn dump_memory_page_using_abi(
         }
     }
 
-    assert_eq!(dump.len(), length, "tried to dump with offset {}, length {}, got a bytestring of length {}", offset, length, dump.len());
+    assert_eq!(
+        dump.len(),
+        length,
+        "tried to dump with offset {}, length {}, got a bytestring of length {}",
+        offset,
+        length,
+        dump.len()
+    );
 
     dump
 }
@@ -320,8 +330,7 @@ pub async fn run_vm(
     .await
 }
 
-
-pub struct ExtendedTestingTools<const B: bool>{
+pub struct ExtendedTestingTools<const B: bool> {
     pub storage: InMemoryStorage,
     pub memory: SimpleMemory,
     pub event_sink: InMemoryEventSink,
@@ -336,7 +345,7 @@ pub fn create_default_testing_tools() -> ExtendedTestingTools<false> {
     let event_sink = InMemoryEventSink::new();
     let precompiles_processor = DefaultPrecompilesProcessor::<false>;
     let decommittment_processor = SimpleDecommitter::<false>::new();
-    let witness_tracer = MemoryLogWitnessTracer{queries: vec![]};
+    let witness_tracer = MemoryLogWitnessTracer { queries: vec![] };
 
     ExtendedTestingTools::<false> {
         storage,
@@ -404,9 +413,19 @@ pub fn create_vm<'a, const B: bool>(
         let _existing = factory_deps.insert(bytecode_hash_as_u256, bytecode_words);
 
         // we write into DEPLOYER that for key == address we have bytecode == bytecode hash
-        storage_els.push((0, *DEPLOYER_SYSTEM_CONTRACT_ADDRESS, address_as_u256, bytecode_hash_as_u256));
+        storage_els.push((
+            0,
+            *DEPLOYER_SYSTEM_CONTRACT_ADDRESS,
+            address_as_u256,
+            bytecode_hash_as_u256,
+        ));
         // we write into FACTORY that for key == bytecode hash we have marker to know it
-        storage_els.push((0, *KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS, bytecode_hash_as_u256, U256::from_dec_str("1").unwrap()));
+        storage_els.push((
+            0,
+            *KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
+            bytecode_hash_as_u256,
+            U256::from_dec_str("1").unwrap(),
+        ));
     }
 
     for assembly in known_contracts.into_iter() {
@@ -415,19 +434,13 @@ pub fn create_vm<'a, const B: bool>(
             .expect("must compile an assembly");
         let bytecode_hash = bytecode_to_code_hash(&bytecode).unwrap();
         let bytecode_words = contract_bytecode_to_words(bytecode);
-        let _ = factory_deps.insert(
-            U256::from_big_endian(&bytecode_hash),
-            bytecode_words,
-        );
+        let _ = factory_deps.insert(U256::from_big_endian(&bytecode_hash), bytecode_words);
     }
 
     for bytecode in known_bytecodes.into_iter() {
         let bytecode_hash = bytecode_to_code_hash(&bytecode).unwrap();
         let bytecode_words = contract_bytecode_to_words(bytecode);
-        let _ = factory_deps.insert(
-            U256::from_big_endian(&bytecode_hash),
-            bytecode_words,
-        );
+        let _ = factory_deps.insert(U256::from_big_endian(&bytecode_hash), bytecode_words);
     }
 
     let decommitter_els: Vec<_> = factory_deps.into_iter().into_iter().collect();
@@ -456,7 +469,7 @@ pub fn create_vm<'a, const B: bool>(
         base_memory_page: MemoryPage(INITIAL_BASE_PAGE),
         code_page: MemoryPage(ENTRY_POINT_PAGE),
         calldata_page: MemoryPage(CALLDATA_PAGE),
-        returndata_page: MemoryPage(0),
+        // returndata_page: MemoryPage(0),
         sp: 0u16,
         pc: initial_pc,
         exception_handler_location: u16::MAX,
@@ -496,7 +509,7 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool>(
 
     // let returndata_offset = r1.0[0] as usize;
     // let returndata_length = r2.0[0] as usize;
-    let returndata_page = vm.local_state.callstack.get_current_stack().returndata_page;
+    let returndata_page = vm.local_state.callstack.returndata_page;
     let current_address = vm.local_state.callstack.get_current_stack().this_address;
 
     match (
@@ -645,14 +658,14 @@ pub async fn run_vm_multi_contracts(
             let mut tracer = DummyVmTracer;
             for _ in 0..cycles_limit {
                 vm.cycle(&mut tracer);
-        
+
                 // early return
                 if let Some(end_result) = vm_may_have_ended(&vm) {
                     result = Some(end_result);
                     break;
                 }
             }
-        },
+        }
         VmTracingOptions::TraceDump => {
             use crate::trace::*;
             let debug_info = ContractSourceDebugInfo {
@@ -662,7 +675,7 @@ pub async fn run_vm_multi_contracts(
             };
 
             let mut tracer = VmDebugTracer::new(debug_info);
-            
+
             for _ in 0..cycles_limit {
                 vm.witness_tracer.queries.truncate(0);
                 vm.cycle(&mut tracer);
@@ -672,8 +685,12 @@ pub async fn run_vm_multi_contracts(
                 last_step.memory_interactions.truncate(0);
                 for query in vm.witness_tracer.queries.drain(..) {
                     let memory_type = match query.location.memory_type {
-                        zk_evm::abstractions::MemoryType::Calldata => crate::trace::MemoryType::calldata,
-                        zk_evm::abstractions::MemoryType::Returndata => crate::trace::MemoryType::returndata,
+                        zk_evm::abstractions::MemoryType::Calldata => {
+                            crate::trace::MemoryType::calldata
+                        }
+                        zk_evm::abstractions::MemoryType::Returndata => {
+                            crate::trace::MemoryType::returndata
+                        }
                         zk_evm::abstractions::MemoryType::Heap => crate::trace::MemoryType::heap,
                         zk_evm::abstractions::MemoryType::Code => crate::trace::MemoryType::code,
                         zk_evm::abstractions::MemoryType::Stack => crate::trace::MemoryType::stack,
@@ -693,7 +710,7 @@ pub async fn run_vm_multi_contracts(
                         page,
                         address,
                         value,
-                        direction
+                        direction,
                     };
 
                     last_step.memory_interactions.push(as_interaction);
@@ -716,7 +733,7 @@ pub async fn run_vm_multi_contracts(
                 let VmDebugTracer {
                     steps, debug_info, ..
                 } = tracer;
-            
+
                 let empty_callstack_dummy_debug_info = ContractSourceDebugInfo {
                     assembly_code: "nop r0, r0, r0, r0".to_owned(),
                     pc_line_mapping: HashMap::from([(0, 0)]),
@@ -731,13 +748,13 @@ pub async fn run_vm_multi_contracts(
                 );
                 sources.insert(
                     format!("0x{}", hex::encode(entry_address.as_bytes())),
-                    debug_info
+                    debug_info,
                 );
 
                 let full_trace = VmTrace { steps, sources };
                 output_execution_trace(full_trace, entry_address, test_name);
             }
-        },
+        }
         VmTracingOptions::ManualVerbose => {
             use crate::runners::debug_tracer::DebugTracerWithAssembly;
             let mut tracer = DebugTracerWithAssembly {
@@ -745,7 +762,7 @@ pub async fn run_vm_multi_contracts(
             };
             for _ in 0..cycles_limit {
                 vm.cycle(&mut tracer);
-        
+
                 // early return
                 if let Some(end_result) = vm_may_have_ended(&vm) {
                     result = Some(end_result);
@@ -755,7 +772,7 @@ pub async fn run_vm_multi_contracts(
         }
     }
 
-    let returndata_page = vm.local_state.callstack.get_current_stack().returndata_page;
+    let returndata_page = vm.local_state.callstack.returndata_page;
 
     let execution_result = if let Some(result) = result {
         result
@@ -837,7 +854,8 @@ pub async fn run_vm_multi_contracts(
         VmExecutionResult::MostLikelyDidNotFinish(..) => vec![],
     };
 
-    let compiler_tests_events: Vec<crate::runners::events::Event> = events.iter().cloned().map(|el| el.into()).collect();
+    let compiler_tests_events: Vec<crate::runners::events::Event> =
+        events.iter().cloned().map(|el| el.into()).collect();
 
     let serialized_events = serde_json::to_string_pretty(&compiler_tests_events).unwrap();
 
@@ -862,7 +880,7 @@ pub async fn run_vm_multi_contracts(
         raw_events,
         to_l1_messages: l1_messages,
         events,
-        serialized_events
+        serialized_events,
     }
 }
 
@@ -880,7 +898,7 @@ impl VmTracingOptions {
             x if x == Self::None as u64 => Self::None,
             x if x == Self::TraceDump as u64 => Self::TraceDump,
             x if x == Self::ManualVerbose as u64 => Self::ManualVerbose,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 

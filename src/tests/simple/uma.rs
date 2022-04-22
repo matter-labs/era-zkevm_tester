@@ -104,5 +104,3 @@ mod tests {
         run_for_result_only(assembly);
     }
 }
-
-

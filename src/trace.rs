@@ -136,7 +136,7 @@ pub fn run_text_assembly_full_trace(
         empty_callstack_dummy_debug_info,
     );
 
-    let full_trace = VmTrace { steps, sources};
+    let full_trace = VmTrace { steps, sources };
 
     full_trace
 }
@@ -239,7 +239,7 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
         let code_page = current_context.code_page.0;
         let base_memory_page = current_context.base_memory_page.0;
         let calldata_page = current_context.calldata_page.0;
-        let returndata_page = current_context.returndata_page.0;
+        let returndata_page = state.vm_local_state.callstack.returndata_page.0;
         self.callstack_info = Some(current_context.clone());
         drop(current_context);
         self.debug_info.active_lines.insert(current_pc as usize);
@@ -307,8 +307,8 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
 
         if self.did_return_recently {
             // get new context
+            let returndata_page = state.vm_local_state.callstack.returndata_page.0;
             let current_context = state.vm_local_state.callstack.get_current_stack();
-            let returndata_page = current_context.returndata_page.0;
             let returndata_offset = state.vm_local_state.registers[0].0[0] as usize;
             let returndata_len = state.vm_local_state.registers[1].0[0] as usize;
 
@@ -465,9 +465,9 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
 
         let trace_step = self.steps.last_mut().unwrap();
         trace_step.registers = state
-        .vm_local_state
-        .registers
-        .map(|el| format!("0x{:x}", el));
+            .vm_local_state
+            .registers
+            .map(|el| format!("0x{:x}", el));
 
         if let Some(mem) = data.dst0_mem_location {
             let MemoryLocation {
@@ -626,6 +626,70 @@ pub(crate) fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_tex
         events,
         to_l1_messages,
         raw_events,
+        serialized_events,
+        ..
+    } = snapshot;
+    dbg!(execution_has_ended);
+    dbg!(execution_result);
+    dbg!(registers);
+    dbg!(hex::encode(&returndata_bytes));
+    dbg!(events);
+    dbg!(storage);
+    println!("{}", serialized_events);
+}
+
+use crate::runners::compiler_tests::VmExecutionContext;
+
+pub(crate) fn run_inner_with_context(
+    calldata: Vec<u8>,
+    options: VmLaunchOption,
+    assembly_text: &str,
+    context: VmExecutionContext,
+) {
+    use crate::runners::compiler_tests::*;
+
+    use futures::executor::block_on;
+    let assembly = Assembly::try_from(assembly_text.to_owned()).unwrap();
+    let entry_address = context.this_address;
+    let mut contracts: HashMap<Address, Assembly> = HashMap::new();
+    contracts.insert(entry_address, assembly.clone());
+    let snapshot = block_on(run_vm_multi_contracts(
+        "manual".to_owned(),
+        contracts,
+        calldata,
+        HashMap::new(),
+        vec![],
+        entry_address,
+        Some(context),
+        options,
+        1024,
+        u16::MAX as usize,
+        vec![assembly.clone()],
+        vec![],
+        HashMap::new(),
+    ));
+
+    let VmSnapshot {
+        registers,
+        flags,
+        timestamp,
+        memory_page_counter,
+        tx_number_in_block,
+        previous_pc,
+        did_call_or_ret_recently,
+        tx_origin,
+        calldata_area_dump,
+        returndata_area_dump,
+        execution_has_ended,
+        stack_dump,
+        heap_dump,
+        storage,
+        deployed_contracts,
+        execution_result,
+        returndata_bytes,
+        events,
+        to_l1_messages,
+        raw_events,
         ..
     } = snapshot;
     dbg!(execution_has_ended);
@@ -638,7 +702,7 @@ pub(crate) fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_tex
 
 #[cfg(test)]
 mod test {
-    use crate::runners::compiler_tests::set_tracing_mode;
+    use crate::runners::compiler_tests::{set_tracing_mode, VmExecutionContext};
 
     use super::*;
 
@@ -804,12 +868,20 @@ __selector:
 
     #[test]
     fn test_manually() {
-        run_inner(hex::decode("5a8ac02d").unwrap(), VmLaunchOption::Default, SIMPLE_ASSEMBLY);
+        run_inner(
+            hex::decode("5a8ac02d").unwrap(),
+            VmLaunchOption::Default,
+            SIMPLE_ASSEMBLY,
+        );
     }
 
     #[test]
     fn test_constructor_manually() {
-        run_inner(hex::decode("5a8ac02d").unwrap(), VmLaunchOption::Constructor, SIMPLE_ASSEMBLY);
+        run_inner(
+            hex::decode("5a8ac02d").unwrap(),
+            VmLaunchOption::Constructor,
+            SIMPLE_ASSEMBLY,
+        );
     }
 
     const WITH_EVENTS_ASSEMBLY: &'static str = r#"
@@ -972,7 +1044,12 @@ __selector:
 
     #[test]
     fn run_for_events() {
-        run_inner(hex::decode("29e99f07000000000000000000000000000000000000000000000000000000000000002a").unwrap(), VmLaunchOption::Default, WITH_EVENTS_ASSEMBLY);
+        run_inner(
+            hex::decode("29e99f07000000000000000000000000000000000000000000000000000000000000002a")
+                .unwrap(),
+            VmLaunchOption::Default,
+            WITH_EVENTS_ASSEMBLY,
+        );
     }
 
     const SIMPLE_TOUCH_STORAGE: &'static str = r#"
@@ -998,7 +1075,11 @@ __entry:
 
     #[test]
     fn run_for_simple_storage_touch() {
-        run_inner(hex::decode("").unwrap(), VmLaunchOption::Default, SIMPLE_TOUCH_STORAGE);
+        run_inner(
+            hex::decode("").unwrap(),
+            VmLaunchOption::Default,
+            SIMPLE_TOUCH_STORAGE,
+        );
     }
 
     const SIMPLE_STORAGE_WITH_ROLLBACK: &'static str = r#"
@@ -1024,7 +1105,11 @@ __entry:
 
     #[test]
     fn run_for_simple_storage_with_rollback() {
-        run_inner(hex::decode("").unwrap(), VmLaunchOption::Default, SIMPLE_STORAGE_WITH_ROLLBACK);
+        run_inner(
+            hex::decode("").unwrap(),
+            VmLaunchOption::Default,
+            SIMPLE_STORAGE_WITH_ROLLBACK,
+        );
     }
 
     const SIMPLE_STORAGE_WITH_ROLLBACK_OF_CHILD: &'static str = r#"
@@ -1056,9 +1141,12 @@ __entry:
 
     #[test]
     fn run_for_simple_storage_with_rollback_in_inner_frame() {
-        run_inner(hex::decode("").unwrap(), VmLaunchOption::Default, SIMPLE_STORAGE_WITH_ROLLBACK_OF_CHILD);
+        run_inner(
+            hex::decode("").unwrap(),
+            VmLaunchOption::Default,
+            SIMPLE_STORAGE_WITH_ROLLBACK_OF_CHILD,
+        );
     }
-
 
     const MANUAL_DEFAULT_UNWIND_LABEL_ACCESS: &'static str = r#"
                 .text
@@ -1390,7 +1478,11 @@ __entry:
 
     #[test]
     fn run_parse_manual_default_unwind() {
-        run_inner(hex::decode("").unwrap(), VmLaunchOption::Default, MANUAL_DEFAULT_UNWIND_LABEL_ACCESS);
+        run_inner(
+            hex::decode("").unwrap(),
+            VmLaunchOption::Default,
+            MANUAL_DEFAULT_UNWIND_LABEL_ACCESS,
+        );
     }
 
     const ENSURE_PROPER_RETURN_ON_REVERT: &'static str = r#"
@@ -2032,7 +2124,210 @@ __entry:
     #[test]
     fn run_returndata_on_revert() {
         set_tracing_mode(VmTracingOptions::ManualVerbose);
-        run_inner(hex::decode("bb0fa1300000000000000000000000000000000000000000000000000000000000000001").unwrap(), VmLaunchOption::Default, ENSURE_PROPER_RETURN_ON_REVERT);
+        run_inner(
+            hex::decode("bb0fa1300000000000000000000000000000000000000000000000000000000000000001")
+                .unwrap(),
+            VmLaunchOption::Default,
+            ENSURE_PROPER_RETURN_ON_REVERT,
+        );
+    }
+
+    const KECCAK256_SYSTEM_ASM: &'static str = r#"
+	.text
+	.file	"Test_270"
+	.globl	__entry
+__entry:
+.func_begin0:
+	add	@CPI0_0[0], r0, r4
+	uma.heap_write	r4, r1, r0
+	add	@CPI0_1[0], r0, r1
+	uma.heap_write	r1, r2, r0
+	and	1, r3, r1
+	add	1, r0, r2
+	sub!	r1, r2, r1
+	jump.ne	@.BB0_2
+	add	128, r0, r1
+	add	64, r0, r2
+	uma.heap_write	r2, r1, r0
+	ret.ok.to_label	r1, @DEFAULT_FAR_RETURN
+.BB0_2:
+	near_call	r0, @__selector, @DEFAULT_UNWIND
+.func_end0:
+
+__selector:
+.func_begin1:
+	add	128, r0, r1
+	add	64, r0, r2
+	uma.heap_write	r2, r1, r0
+	add	@CPI1_0[0], r0, r1
+	context.code_source	r2
+	and	r2, r1, r1
+	context.this	r2
+	sub!	r1, r2, r1
+	jump.eq	@.BB1_2
+	add	0, r0, r1
+	ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
+.BB1_2:
+	add	@CPI1_1[0], r0, r1
+	uma.heap_read	r1, r0, r6
+	add	1024, r0, r1
+	sub!	r6, r1, r1
+	jump.le	@.BB1_4
+	add	0, r0, r1
+	ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
+.BB1_4:
+	and	65535, r6, r1
+	div.s	136, r1, r1, r2
+	sub	136, r2, r1
+	and	65535, r1, r3
+	add	r6, r3, r1
+	and	65535, r1, r2
+	div.s	136, r2, r5, r2
+	mul	136, r5, r2, r4
+	sub	r1, r2, r2
+	and	65535, r2, r2
+	add	0, r0, r4
+	sub!	r2, r4, r2
+	jump.eq	@.BB1_6
+	add	@CPI1_2[0], r0, r1
+	uma.heap_write	r4, r1, r0
+	add	1, r0, r1
+	add	4, r0, r2
+	uma.heap_write	r2, r1, r0
+	add	@CPI1_3[0], r0, r1
+	ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
+.BB1_6:
+	and	31, r1, r2
+	sub!	r2, r4, r2
+	add	0, r0, r2
+	add.ne	1, r0, r2
+	add	@CPI1_4[0], r0, r8
+	and	31, r6, r7
+	add	@CPI1_5[0], r0, r9
+	uma.heap_read	r9, r0, r9
+	shr.s	5, r6, r10
+	sub!	r10, r4, r11
+	jump.eq	@.BB1_16
+.BB1_7:
+	shl.s	5, r4, r11
+	add	r9, r11, r12
+	uma.calldata_read	r12, r0, r12
+	add	128, r11, r11
+	uma.heap_write	r11, r12, r0
+	add	1, r4, r4
+	sub!	r4, r10, r11
+	jump.lt	@.BB1_7
+	jump	@.BB1_16
+.BB1_8:
+	and	r6, r8, r6
+	add	r9, r6, r8
+	shl.s	3, r7, r7
+	add	128, r6, r6
+	uma.heap_read	r6, r0, r9
+	shl	r9, r7, r9
+	shr	r9, r7, r9
+	uma.calldata_read	r8, r0, r8
+	sub	256, r7, r7
+	shr	r8, r7, r8
+	shl	r8, r7, r7
+	or	r7, r9, r7
+	uma.heap_write	r6, r7, r0
+.BB1_9:
+	and	65535, r5, r5
+	add	@CPI1_6[0], r0, r7
+	add	@CPI1_1[0], r0, r6
+	uma.heap_read	r6, r0, r6
+	add	128, r6, r8
+	add	1, r0, r6
+	sub!	r3, r6, r3
+	jump.ne	@.BB1_15
+.BB1_10:
+	uma.heap_write	r8, r7, r0
+	mul	100, r5, r3, r7
+	add	100, r3, r3
+    context.ergs_left r6
+	sub!	r6, r3, r6
+	jump.ge	@.BB1_12
+	add	0, r0, r1
+	ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
+.BB1_12:
+	and	1, r2, r2
+	shr.s	5, r1, r1
+	add	r1, r2, r1
+	shl.s	32, r1, r1
+	add	@CPI1_9[0], r0, r2
+	and	r1, r2, r1
+	shl.s	192, r5, r2
+	or	r1, r2, r1
+	add	@CPI1_10[0], r0, r2
+	or	r1, r2, r1
+	precompile	r1, r3, r1
+	sub!	r1, r4, r1
+	jump.ne	@.BB1_14
+	add	0, r0, r1
+	ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
+.BB1_14:
+	add	@CPI1_11[0], r0, r1
+	ret.ok.to_label	r1, @DEFAULT_FAR_RETURN
+.BB1_15:
+	add	@CPI1_7[0], r0, r3
+	uma.heap_write	r8, r3, r0
+	add	@CPI1_8[0], r0, r7
+	add	127, r1, r8
+	jump	@.BB1_10
+.BB1_16:
+	add	0, r0, r4
+	sub!	r7, r4, r10
+	jump.ne	@.BB1_8
+	jump	@.BB1_9
+.func_end1:
+
+	.note.GNU-stack
+	.rodata
+CPI0_0:
+	.cell 16777184
+CPI0_1:
+	.cell 16777152
+CPI1_0:
+	.cell 1461501637330902918203684832716283019655932542975
+CPI1_1:
+	.cell 16777152
+CPI1_2:
+	.cell 35408467139433450592217433187231851964531694900788300625387963629091585785856
+CPI1_3:
+	.cell 154618822656
+CPI1_4:
+	.cell -32
+CPI1_5:
+	.cell 16777184
+CPI1_6:
+	.cell -57443731770074831323412168344153766786583156455220123566449660816425654157312
+CPI1_7:
+	.cell 452312848583266388373324160190187140051835877600158453279131187530910662656
+CPI1_8:
+	.cell -57896044618658097711785492504343953926634992332820282019728792003956564819968
+CPI1_9:
+	.cell 18446744069414584320
+CPI1_10:
+	.cell 79228162514264337593543950340
+CPI1_11:
+	.cell 137438953472
+    "#;
+
+    #[test]
+    fn run_keccak_system_contract() {
+        set_tracing_mode(VmTracingOptions::ManualVerbose);
+        let mut ctx = VmExecutionContext::default();
+        ctx.msg_sender = Address::from_low_u64_be(0x1_000_000);
+        ctx.this_address = Address::from_low_u64_be(0x10);
+        dbg!(ctx.msg_sender);
+        dbg!(ctx.this_address);
+        run_inner_with_context(
+            hex::decode("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap(),
+            // hex::decode("00ff").unwrap(), 
+            VmLaunchOption::Default,
+            KECCAK256_SYSTEM_ASM,
+            ctx
+        );
     }
 }
-

@@ -2,7 +2,7 @@ use zk_evm::aux_structures::MemoryQuery;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MemoryLogWitnessTracer {
-    pub queries: Vec<MemoryQuery>
+    pub queries: Vec<MemoryQuery>,
 }
 
 use zk_evm::witness_trace::VmWitnessTracer;

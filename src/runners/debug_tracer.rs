@@ -14,11 +14,7 @@ impl Tracer for DummyVmTracer {
 
     type SupportedMemory = SimpleMemory;
 
-    fn before_decoding(
-        &mut self,
-        state: VmLocalStateData<'_>,
-        _memory: &Self::SupportedMemory
-    ) {
+    fn before_decoding(&mut self, state: VmLocalStateData<'_>, _memory: &Self::SupportedMemory) {
         if get_tracing_mode() != VmTracingOptions::ManualVerbose {
             return;
         }
@@ -91,6 +87,9 @@ impl<'a> Tracer for DebugTracerWithAssembly<'a> {
             };
 
             println!("Executing {}", l.trim());
+            if l.trim().contains("far_call") {
+                println!("Breakpoint");
+            }
         }
     }
     fn after_decoding(

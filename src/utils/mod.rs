@@ -1,4 +1,7 @@
-pub trait FixedLengthIterator<'a, I: 'a, const N: usize>: Iterator<Item = I> where Self: 'a {
+pub trait FixedLengthIterator<'a, I: 'a, const N: usize>: Iterator<Item = I>
+where
+    Self: 'a,
+{
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
         <Self as Iterator>::next(self)
     }
@@ -26,8 +29,10 @@ impl<T: Clone, const N: usize> Iterator for FixedBufferValueIterator<T, N> {
     }
 }
 
-impl<T: Clone + 'static, const N: usize> FixedLengthIterator<'static, T, N> for FixedBufferValueIterator<T, N> {}
-
+impl<T: Clone + 'static, const N: usize> FixedLengthIterator<'static, T, N>
+    for FixedBufferValueIterator<T, N>
+{
+}
 
 use crate::U256;
 impl IntoFixedLengthByteIterator<32> for U256 {
@@ -37,7 +42,7 @@ impl IntoFixedLengthByteIterator<32> for U256 {
         self.to_little_endian(&mut buffer);
 
         FixedBufferValueIterator {
-            iter: buffer.into_iter()
+            iter: buffer.into_iter(),
         }
     }
 
@@ -46,9 +51,7 @@ impl IntoFixedLengthByteIterator<32> for U256 {
         self.to_big_endian(&mut buffer);
 
         FixedBufferValueIterator {
-            iter: buffer.into_iter()
+            iter: buffer.into_iter(),
         }
     }
 }
-
-

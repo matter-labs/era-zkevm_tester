@@ -13,7 +13,10 @@ pub const EMPTY_CONTEXT_HEX: &'static str = "0x000000000000000000000000000000000
 pub const DEFAULT_CALLEE_HEX: &'static str = "0x0000000000000000000000000000000000001388";
 
 pub fn default_callee_address() -> Address {
-    let bytes: [u8; 20] = hex::decode(&DEFAULT_CALLEE_HEX[2..]).unwrap().try_into().unwrap();
+    let bytes: [u8; 20] = hex::decode(&DEFAULT_CALLEE_HEX[2..])
+        .unwrap()
+        .try_into()
+        .unwrap();
     Address::from_slice(&bytes)
 }
 
@@ -76,7 +79,7 @@ pub fn create_vm_with_default_settings<'a, const B: bool>(
         base_memory_page: MemoryPage(INITIAL_BASE_PAGE),
         code_page: MemoryPage(ENTRY_POINT_PAGE),
         calldata_page: MemoryPage(CALLDATA_PAGE),
-        returndata_page: MemoryPage(0),
+        // returndata_page: MemoryPage(0),
         sp: 0u16,
         pc: 0u16,
         exception_handler_location: 0u16,

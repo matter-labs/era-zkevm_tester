@@ -1,7 +1,7 @@
+pub mod compiler_tests;
 pub mod debug_tracer;
 pub mod events;
 pub mod simple_witness_tracer;
-pub mod compiler_tests;
 
 use crate::trace::VmTrace;
 use crate::Address;
@@ -53,11 +53,7 @@ pub fn output_execution_trace(trace: VmTrace, entry_address: Address, test_name:
         |e| warn!("Unable to create file {}: {}", file_name, e),
         |file| match serde_json::to_writer(&file, &trace) {
             Err(err) => warn!("Unable to write trace to file {}: {}", file_name, err),
-            Ok(_) => info!(
-                "Wrote trace ({} steps) to file {}",
-                steps,
-                file_name
-            ),
+            Ok(_) => info!("Wrote trace ({} steps) to file {}", steps, file_name),
         },
     )
 }

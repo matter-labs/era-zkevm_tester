@@ -1,4 +1,4 @@
-use zk_evm::{testing::event_sink::{EventMessage}, ethereum_types::Address};
+use zk_evm::{ethereum_types::Address, testing::event_sink::EventMessage};
 
 #[derive(Clone)]
 pub struct SolidityLikeEvent {
@@ -6,7 +6,7 @@ pub struct SolidityLikeEvent {
     pub tx_number_in_block: u16,
     pub address: Address,
     pub topics: Vec<[u8; 32]>,
-    pub data: Vec<u8>
+    pub data: Vec<u8>,
 }
 
 impl std::fmt::Debug for SolidityLikeEvent {
@@ -15,18 +15,21 @@ impl std::fmt::Debug for SolidityLikeEvent {
             .field("shard_id", &self.shard_id)
             .field("tx_number_in_block", &self.tx_number_in_block)
             .field("address", &self.address)
-            .field("topics", &format_args!(
-                "[{}]", 
-                self.topics.iter().map(
-                    |el| format!("0x{}", hex::encode(&el))
-                ).collect::<Vec<_>>().join(",")
-            )
+            .field(
+                "topics",
+                &format_args!(
+                    "[{}]",
+                    self.topics
+                        .iter()
+                        .map(|el| format!("0x{}", hex::encode(&el)))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ),
             )
             .field("value", &format_args!("0x{}", hex::encode(&self.data)))
-        .finish()
+            .finish()
     }
 }
-
 
 pub fn merge_events(events: Vec<EventMessage>) -> Vec<SolidityLikeEvent> {
     let mut result = vec![];
@@ -34,10 +37,22 @@ pub fn merge_events(events: Vec<EventMessage>) -> Vec<SolidityLikeEvent> {
 
     for message in events.into_iter() {
         if !message.is_first {
-            let EventMessage { shard_id, is_first: _, tx_number_in_block, address, key, value } = message;
+            let EventMessage {
+                shard_id,
+                is_first: _,
+                tx_number_in_block,
+                address,
+                key,
+                value,
+            } = message;
 
-            if let Some((mut remaining_data_length, mut remaining_topics, mut event)) = current.take() {
-                if event.address != address || event.shard_id != shard_id || event.tx_number_in_block != tx_number_in_block {
+            if let Some((mut remaining_data_length, mut remaining_topics, mut event)) =
+                current.take()
+            {
+                if event.address != address
+                    || event.shard_id != shard_id
+                    || event.tx_number_in_block != tx_number_in_block
+                {
                     continue;
                 }
                 let mut data_0 = [0u8; 32];
@@ -64,19 +79,23 @@ pub fn merge_events(events: Vec<EventMessage>) -> Vec<SolidityLikeEvent> {
                 } else {
                     result.push(event);
                 }
-
-
-            } 
-        }
-        else {
+            }
+        } else {
             // start new one. First take the old one only if it's well formed
             if let Some((remaining_data_length, remaining_topics, event)) = current.take() {
                 if remaining_data_length == 0 && remaining_topics == 0 {
                     result.push(event);
                 }
-            } 
+            }
 
-            let EventMessage { shard_id, is_first: _, tx_number_in_block, address, key, value } = message;
+            let EventMessage {
+                shard_id,
+                is_first: _,
+                tx_number_in_block,
+                address,
+                key,
+                value,
+            } = message;
             // split key as our internal marker. Ignore higher bits
             let mut num_topics = key.0[0] as u32;
             let data_length = (key.0[0] >> 32) as usize;
@@ -95,7 +114,7 @@ pub fn merge_events(events: Vec<EventMessage>) -> Vec<SolidityLikeEvent> {
                 tx_number_in_block,
                 address,
                 topics,
-                data: vec![]
+                data: vec![],
             };
 
             current = Some((data_length, num_topics, new_event))
@@ -107,8 +126,8 @@ pub fn merge_events(events: Vec<EventMessage>) -> Vec<SolidityLikeEvent> {
         if remaining_data_length == 0 && remaining_topics == 0 {
             result.push(event);
         }
-    } 
-    
+    }
+
     result
 }
 
@@ -129,9 +148,13 @@ pub struct Event {
 }
 
 impl Into<Event> for SolidityLikeEvent {
-    fn into(self) -> Event { 
+    fn into(self) -> Event {
         // topics are formatted as hex with 0x
-        let topics = self.topics.into_iter().map(|el| format!("0x{}", hex::encode(&el))).collect();
+        let topics = self
+            .topics
+            .into_iter()
+            .map(|el| format!("0x{}", hex::encode(&el)))
+            .collect();
         // values are formatted as integers
 
         let mut values = vec![];
@@ -148,6 +171,6 @@ impl Into<Event> for SolidityLikeEvent {
             values.push(format!("{}", as_integer));
         }
 
-        Event { topics, values}
+        Event { topics, values }
     }
 }
