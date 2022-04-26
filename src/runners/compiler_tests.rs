@@ -262,7 +262,7 @@ pub struct VmSnapshot {
     pub timestamp: u32,
     pub memory_page_counter: u32,
     pub tx_number_in_block: u16,
-    pub previous_pc: u16,
+    pub previous_super_pc: u16,
     pub did_call_or_ret_recently: bool,
     pub tx_origin: Address,
     pub calldata_area_dump: MemoryArea,
@@ -278,6 +278,7 @@ pub struct VmSnapshot {
     pub to_l1_messages: Vec<EventMessage>,
     pub events: Vec<SolidityLikeEvent>,
     pub serialized_events: String,
+    pub num_cycles_used: usize,
 }
 
 #[derive(Debug)]
@@ -652,12 +653,15 @@ pub async fn run_vm_multi_contracts(
 
     let mut result = None;
 
+    let mut cycles_used = 0;
+
     match get_tracing_mode() {
         VmTracingOptions::None => {
             use crate::runners::debug_tracer::DummyVmTracer;
             let mut tracer = DummyVmTracer;
             for _ in 0..cycles_limit {
                 vm.cycle(&mut tracer);
+                cycles_used += 1;
 
                 // early return
                 if let Some(end_result) = vm_may_have_ended(&vm) {
@@ -679,6 +683,7 @@ pub async fn run_vm_multi_contracts(
             for _ in 0..cycles_limit {
                 vm.witness_tracer.queries.truncate(0);
                 vm.cycle(&mut tracer);
+                cycles_used += 1;
 
                 // manually replace all memory interactions
                 let last_step = tracer.steps.last_mut().unwrap();
@@ -762,6 +767,7 @@ pub async fn run_vm_multi_contracts(
             };
             for _ in 0..cycles_limit {
                 vm.cycle(&mut tracer);
+                cycles_used += 1;
 
                 // early return
                 if let Some(end_result) = vm_may_have_ended(&vm) {
@@ -865,7 +871,7 @@ pub async fn run_vm_multi_contracts(
         timestamp: local_state.timestamp,
         memory_page_counter: local_state.memory_page_counter,
         tx_number_in_block: local_state.tx_number_in_block,
-        previous_pc: local_state.previous_pc,
+        previous_super_pc: local_state.previous_super_pc,
         did_call_or_ret_recently: local_state.did_call_or_ret_recently,
         tx_origin: local_state.tx_origin,
         calldata_area_dump: calldata_mem,
@@ -881,6 +887,7 @@ pub async fn run_vm_multi_contracts(
         to_l1_messages: l1_messages,
         events,
         serialized_events,
+        num_cycles_used: cycles_used
     }
 }
 
