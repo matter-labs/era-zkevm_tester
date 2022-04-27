@@ -178,7 +178,8 @@ pub(crate) fn dump_memory_page_using_abi(
     r2: U256,
 ) -> Vec<u8> {
     let offset = r1.0[0] as usize;
-    let length = r2.0[0] as usize;
+    let length = r1.0[1] as usize;
+    // let length = r2.0[0] as usize;
     assert!(offset < (1u32 << 24) as usize);
     assert!(length < (1u32 << 24) as usize);
     let mut dump = Vec::with_capacity(length);
@@ -504,8 +505,8 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool>(
 ) -> Option<VmExecutionResult> {
     let execution_has_ended = vm.execution_has_ended();
 
-    let r1 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_OFFSET_REGISTER as usize];
-    let r2 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_LENGTH_REGISTER as usize];
+    let r1 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_PARAMETERS_REGISTER as usize];
+    let r2 = vm.local_state.registers[RET_RESERVED_REGISTER_0 as usize];
     // let r3 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_LENGTH_REGISTER as usize];
 
     // let returndata_offset = r1.0[0] as usize;
@@ -632,23 +633,35 @@ pub async fn run_vm_multi_contracts(
         initial_pc,
     );
 
+    // if set_far_call_props {
+    //     // we need to properly set calldata abi
+    //     let r1 = U256::zero();
+
+    //     let mut r2 = U256::zero();
+    //     r2.0[0] = calldata_length as u64;
+
+    //     vm.local_state.registers[0] = r1;
+    //     vm.local_state.registers[1] = r2;
+    //     if vm_launch_option == VmLaunchOption::Constructor {
+    //         vm.local_state.registers[2] = U256::from_dec_str("1").unwrap();
+    //     } else {
+    //         vm.local_state.registers[2] = U256::zero();
+    //     }
+
+    //     let r4 = U256::zero();
+    //     vm.local_state.registers[3] = r4;
+    // }
+
     if set_far_call_props {
         // we need to properly set calldata abi
-        let r1 = U256::zero();
-
-        let mut r2 = U256::zero();
-        r2.0[0] = calldata_length as u64;
-
-        vm.local_state.registers[0] = r1;
-        vm.local_state.registers[1] = r2;
+        let mut r1 = U256::zero();
+        r1.0[1] = calldata_length as u64;
         if vm_launch_option == VmLaunchOption::Constructor {
-            vm.local_state.registers[2] = U256::from_dec_str("1").unwrap();
+            r1.0[3] = 1u64;
         } else {
-            vm.local_state.registers[2] = U256::zero();
         }
-
-        let r4 = U256::zero();
-        vm.local_state.registers[3] = r4;
+        vm.local_state.registers[0] = r1;
+        vm.local_state.registers[1] = U256::zero();
     }
 
     let mut result = None;
