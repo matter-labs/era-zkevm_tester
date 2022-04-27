@@ -505,8 +505,8 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool>(
 ) -> Option<VmExecutionResult> {
     let execution_has_ended = vm.execution_has_ended();
 
-    let r1 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_LENGTH_REGISTER as usize];
-    let r2 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_OFFSET_REGISTER as usize];
+    let r1 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_OFFSET_REGISTER as usize];
+    let r2 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_LENGTH_REGISTER as usize];
     // let r3 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_LENGTH_REGISTER as usize];
 
     // let returndata_offset = r1.0[0] as usize;
