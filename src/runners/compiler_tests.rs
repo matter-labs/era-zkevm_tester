@@ -178,8 +178,8 @@ pub(crate) fn dump_memory_page_using_abi(
     r2: U256,
 ) -> Vec<u8> {
     let offset = r1.0[0] as usize;
-    // let length = r1.0[1] as usize;
-    let length = r2.0[0] as usize;
+    let length = r1.0[1] as usize;
+    // let length = r2.0[0] as usize;
     assert!(offset < (1u32 << 24) as usize);
     assert!(length < (1u32 << 24) as usize);
     let mut dump = Vec::with_capacity(length);
@@ -505,8 +505,11 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool>(
 ) -> Option<VmExecutionResult> {
     let execution_has_ended = vm.execution_has_ended();
 
-    let r1 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_OFFSET_REGISTER as usize];
-    let r2 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_LENGTH_REGISTER as usize];
+    let r1 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_PARAMS_REGISTER as usize];
+    let r2 = vm.local_state.registers[RET_RESERVED_REGISTER_TEMPORARY as usize];
+
+    // let r1 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_OFFSET_REGISTER as usize];
+    // let r2 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_LENGTH_REGISTER as usize];
     // let r3 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_LENGTH_REGISTER as usize];
 
     // let returndata_offset = r1.0[0] as usize;
