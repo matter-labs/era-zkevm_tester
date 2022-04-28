@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Add;
 use std::sync::atomic::AtomicU64;
-use zk_evm::aux_structures::*;
+use zk_evm::{aux_structures::*, GenericNoopTracer};
 use zk_evm::block_properties::*;
 use zk_evm::opcodes::execution::ret::*;
 use zk_evm::precompiles::DEPLOYER_SYSTEM_CONTRACT_ADDRESS;
@@ -673,8 +673,7 @@ pub async fn run_vm_multi_contracts(
 
     match get_tracing_mode() {
         VmTracingOptions::None => {
-            use crate::runners::debug_tracer::DummyVmTracer;
-            let mut tracer = DummyVmTracer;
+            let mut tracer = GenericNoopTracer::new();
             for _ in 0..cycles_limit {
                 vm.cycle(&mut tracer);
                 cycles_used += 1;
