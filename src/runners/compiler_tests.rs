@@ -22,6 +22,7 @@ use zk_evm::testing::memory::SimpleMemory;
 use zk_evm::testing::storage::InMemoryStorage;
 use zk_evm::vm_state::*;
 use zkevm_assembly::Assembly;
+use crate::runners::hashmap_based_memory::SimpleHashmapMemory;
 
 use sha2::{Digest, Sha256};
 
@@ -172,7 +173,7 @@ pub fn calldata_to_aligned_data(calldata: &Vec<u8>) -> Vec<U256> {
 }
 
 pub(crate) fn dump_memory_page_using_abi(
-    memory: &SimpleMemory,
+    memory: &SimpleHashmapMemory,
     page: u32,
     r1: U256,
     r2: U256,
@@ -334,7 +335,7 @@ pub async fn run_vm(
 
 pub struct ExtendedTestingTools<const B: bool> {
     pub storage: InMemoryStorage,
-    pub memory: SimpleMemory,
+    pub memory: SimpleHashmapMemory,
     pub event_sink: InMemoryEventSink,
     pub precompiles_processor: DefaultPrecompilesProcessor<B>,
     pub decommittment_processor: SimpleDecommitter<B>,
@@ -343,11 +344,11 @@ pub struct ExtendedTestingTools<const B: bool> {
 
 pub fn create_default_testing_tools() -> ExtendedTestingTools<false> {
     let storage = InMemoryStorage::new();
-    let memory = SimpleMemory::new();
+    let memory = SimpleHashmapMemory::new();
     let event_sink = InMemoryEventSink::new();
     let precompiles_processor = DefaultPrecompilesProcessor::<false>;
     let decommittment_processor = SimpleDecommitter::<false>::new();
-    let witness_tracer = MemoryLogWitnessTracer { queries: vec![] };
+    let witness_tracer = MemoryLogWitnessTracer { is_dummy: false, queries: vec![] };
 
     ExtendedTestingTools::<false> {
         storage,
@@ -373,7 +374,7 @@ pub fn create_vm<'a, const B: bool>(
     VmState<
         'a,
         InMemoryStorage,
-        SimpleMemory,
+        SimpleHashmapMemory,
         InMemoryEventSink,
         DefaultPrecompilesProcessor<B>,
         SimpleDecommitter<B>,
@@ -496,7 +497,7 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool>(
     vm: &VmState<
         'a,
         InMemoryStorage,
-        SimpleMemory,
+        SimpleHashmapMemory,
         InMemoryEventSink,
         DefaultPrecompilesProcessor<B>,
         SimpleDecommitter<B>,
@@ -673,6 +674,7 @@ pub async fn run_vm_multi_contracts(
 
     match get_tracing_mode() {
         VmTracingOptions::None => {
+            vm.witness_tracer.is_dummy = true;
             let mut tracer = GenericNoopTracer::new();
             for _ in 0..cycles_limit {
                 vm.cycle(&mut tracer);
@@ -776,6 +778,7 @@ pub async fn run_vm_multi_contracts(
             }
         }
         VmTracingOptions::ManualVerbose => {
+            vm.witness_tracer.is_dummy = true;
             use crate::runners::debug_tracer::DebugTracerWithAssembly;
             let mut tracer = DebugTracerWithAssembly {
                 assembly: &initial_assembly,
@@ -854,16 +857,22 @@ pub async fn run_vm_multi_contracts(
     }
 
     // memory dump for returndata
-    let returndata_page_content = memory
-        .inner
-        .get(&returndata_page.0)
-        .cloned()
-        .unwrap_or(vec![]);
+    let returndata_page_content = if get_tracing_mode() != VmTracingOptions::None {
+        memory.dump_full_page_as_u256_words(returndata_page.0)
+    } else {
+        vec![]
+    };
+
     let returndata_mem = MemoryArea {
         words: returndata_page_content,
     };
 
-    let calldata_page_content = memory.inner.get(&CALLDATA_PAGE).cloned().unwrap_or(vec![]);
+    let calldata_page_content = if get_tracing_mode() != VmTracingOptions::None {
+        memory.dump_full_page_as_u256_words(CALLDATA_PAGE)
+    } else {
+        vec![]
+    };
+
     let calldata_mem = MemoryArea {
         words: calldata_page_content,
     };

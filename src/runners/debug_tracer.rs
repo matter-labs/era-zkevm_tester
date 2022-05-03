@@ -3,6 +3,8 @@ use zkevm_assembly::Assembly;
 
 use crate::runners::compiler_tests::{get_tracing_mode, VmTracingOptions};
 
+use super::hashmap_based_memory::SimpleHashmapMemory;
+
 #[derive(Debug)]
 pub struct DummyVmTracer;
 
@@ -66,7 +68,7 @@ impl<'a> Tracer for DebugTracerWithAssembly<'a> {
     const CALL_BEFORE_EXECUTION: bool = true;
     const CALL_AFTER_EXECUTION: bool = true;
 
-    type SupportedMemory = SimpleMemory;
+    type SupportedMemory = SimpleHashmapMemory;
 
     fn before_decoding(&mut self, state: VmLocalStateData<'_>, _memory: &Self::SupportedMemory) {
         if get_tracing_mode() != VmTracingOptions::ManualVerbose {

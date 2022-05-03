@@ -98,9 +98,21 @@ pub fn run_text_assembly_full_trace(
 
     let assembly = vm_assembly.compile_to_bytecode().unwrap();
 
-    let mut tools = create_default_testing_tools();
+    // let mut tools = create_default_testing_tools();
+    let mut tools = crate::runners::compiler_tests::create_default_testing_tools();
     let block_properties = create_default_block_properties();
-    let mut vm = create_vm_with_default_settings(&mut tools, &block_properties);
+    // let mut vm = create_vm_with_default_settings(&mut tools, &block_properties);
+    let (mut vm, _) =crate::runners::compiler_tests::create_vm(
+        &mut tools, 
+        &block_properties,
+        VmExecutionContext::default(),
+        vec![],
+        &HashMap::new(),
+        vec![],
+        vec![],
+        HashMap::new(),
+        0,
+    );
 
     // manually encode LE
     let opcodes = contract_bytecode_to_words(assembly);
@@ -207,6 +219,7 @@ impl VmDebugTracer {
 }
 
 use zk_evm::abstractions::*;
+use crate::runners::hashmap_based_memory::SimpleHashmapMemory;
 
 impl zk_evm::abstractions::Tracer for VmDebugTracer {
     const CALL_BEFORE_DECODING: bool = false;
@@ -214,7 +227,7 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
     const CALL_BEFORE_EXECUTION: bool = true;
     const CALL_AFTER_EXECUTION: bool = true;
 
-    type SupportedMemory = SimpleMemory;
+    type SupportedMemory = SimpleHashmapMemory;
 
     fn before_decoding(&mut self, _state: VmLocalStateData<'_>, _memory: &Self::SupportedMemory) {}
     fn after_decoding(
@@ -384,13 +397,22 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
                         unreachable!()
                     };
 
+                    // let value = memory
+                    //     .inner
+                    //     .get(&page)
+                    //     .unwrap_or(&vec![])
+                    //     .get(index as usize)
+                    //     .copied()
+                    //     .unwrap_or(U256::zero());
+
                     let value = memory
                         .inner
                         .get(&page)
-                        .unwrap_or(&vec![])
-                        .get(index as usize)
+                        .unwrap_or(&HashMap::new())
+                        .get(&index)
                         .copied()
                         .unwrap_or(U256::zero());
+
                     let value = format!("0x{:x}", value);
                     let mem_interaction = MemoryInteraction {
                         memory_type,
@@ -501,13 +523,22 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
                         unreachable!()
                     };
 
+                    // let value = memory
+                    //     .inner
+                    //     .get(&page)
+                    //     .unwrap_or(&vec![])
+                    //     .get(index as usize)
+                    //     .copied()
+                    //     .unwrap_or(U256::zero());
+
                     let value = memory
                         .inner
                         .get(&page)
-                        .unwrap_or(&vec![])
-                        .get(index as usize)
+                        .unwrap_or(&HashMap::new())
+                        .get(&index)
                         .copied()
                         .unwrap_or(U256::zero());
+
                     let value = format!("0x{:x}", value);
                     let mem_interaction = MemoryInteraction {
                         memory_type,
@@ -700,8 +731,8 @@ pub(crate) fn run_inner_with_context(
     dbg!(storage);
 }
 
-#[cfg(test)]
-mod test {
+#[cfg(any(test, feature = "external_testing"))]
+pub mod test {
     use crate::runners::compiler_tests::{set_tracing_mode, VmExecutionContext};
 
     use super::*;
@@ -2665,8 +2696,13 @@ CPI1_7:
     "#;
 
     #[test]
-    fn run_ecrecover_system_contract() {
+    fn test_run_ecrecover_system_contract() {
         set_tracing_mode(VmTracingOptions::ManualVerbose);
+        run_ecrecover_system_contract()
+    }
+
+    pub fn run_ecrecover_system_contract() {
+        set_tracing_mode(VmTracingOptions::None);
         let mut ctx = VmExecutionContext::default();
         ctx.msg_sender = Address::from_low_u64_be(0x1_000_000);
         ctx.this_address = Address::from_low_u64_be(0x12);
