@@ -427,7 +427,7 @@ pub fn create_vm<'a, const B: bool>(
             0,
             *KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
             bytecode_hash_as_u256,
-            U256::from_dec_str("1").unwrap(),
+            U256::from(1u64)
         ));
     }
 
