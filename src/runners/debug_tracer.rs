@@ -128,9 +128,8 @@ impl Tracer for DebugTracerWithAssembly {
                     if inner_variant == RetOpcode::Ok || inner_variant == RetOpcode::Revert {
                         let src0 = data.src0_value;
 
-                        let ret_abi = RetABI::from_u256(src0);
-                        let forward_returndata = ret_abi.transit_page;
-                        let page = if forward_returndata {
+                        let abi = RetABI::from_u256(src0);
+                        let page = if abi.transit_page {
                             state.vm_local_state.callstack.returndata_page
                         } else {
                             CallStackEntry::heap_page_from_base(state.vm_local_state.callstack.get_current_stack().base_memory_page)
@@ -139,11 +138,11 @@ impl Tracer for DebugTracerWithAssembly {
                         let returndata = crate::runners::compiler_tests::dump_memory_page_by_offset_and_length(
                             memory,
                             page.0,
-                            ret_abi.returndata_offset.into_raw() as usize,
-                            ret_abi.returndata_length.into_raw() as usize,
+                            abi.returndata_offset.into_raw() as usize,
+                            abi.returndata_length.into_raw() as usize,
                         );
 
-                        println!("Performed return/revert with {}", hex::encode(&returndata));
+                        println!("Performed return/revert with {} bytes with 0x{}", returndata.len(), hex::encode(&returndata));
                     } else {
                         println!("Returned with PANIC");
                     }
@@ -154,8 +153,7 @@ impl Tracer for DebugTracerWithAssembly {
                 let src1 = data.src1_value;
 
                 let abi = FarCallABI::from_u256(src1);
-                let forward_returndata = abi.transit_page;
-                let page = if forward_returndata {
+                let page = if abi.transit_page {
                     state.vm_local_state.callstack.get_current_stack().calldata_page
                 } else {
                     CallStackEntry::heap_page_from_base(state.vm_local_state.callstack.get_current_stack().base_memory_page)
@@ -165,10 +163,10 @@ impl Tracer for DebugTracerWithAssembly {
                     memory,
                     page.0,
                     abi.calldata_length.into_raw() as usize,
-                    abi.calldata_length.into_raw() as usize,
+                    abi.calldata_offset.into_raw() as usize,
                 );
 
-                println!("Performed FARCALL with {}", hex::encode(&calldata));
+                println!("Performed far_call with {} bytes with 0x{}", calldata.len(), hex::encode(&calldata));
             },
             _ => {}
         }
