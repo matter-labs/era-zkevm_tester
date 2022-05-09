@@ -57,12 +57,15 @@ impl Tracer for DummyVmTracer {
     }
 }
 
+use crate::Address;
+
 #[derive(Debug)]
-pub struct DebugTracerWithAssembly<'a> {
-    pub assembly: &'a Assembly,
+pub struct DebugTracerWithAssembly {
+    pub current_code_address: Address,
+    pub code_address_to_assembly: std::collections::HashMap<Address, Assembly>,
 }
 
-impl<'a> Tracer for DebugTracerWithAssembly<'a> {
+impl Tracer for DebugTracerWithAssembly {
     const CALL_BEFORE_DECODING: bool = true;
     const CALL_AFTER_DECODING: bool = true;
     const CALL_BEFORE_EXECUTION: bool = true;
@@ -76,21 +79,23 @@ impl<'a> Tracer for DebugTracerWithAssembly<'a> {
         }
         println!("New cycle -------------------------");
         let pc = state.vm_local_state.callstack.get_current_stack().pc;
-        if let Some(line) = self.assembly.pc_line_mapping.get(&(pc as usize)).copied() {
-            let l = if line == 0 {
-                self.assembly.assembly_code.lines().next().unwrap()
-            } else {
-                self.assembly
-                    .assembly_code
-                    .lines()
-                    .skip(line)
-                    .next()
-                    .unwrap()
-            };
-
-            println!("Executing {}", l.trim());
-            if l.trim().contains("far_call") {
-                println!("Breakpoint");
+        if let Some(assembly) = self.code_address_to_assembly.get(&self.current_code_address) {
+            if let Some(line) = assembly.pc_line_mapping.get(&(pc as usize)).copied() {
+                let l = if line == 0 {
+                    assembly.assembly_code.lines().next().unwrap()
+                } else {
+                    assembly
+                        .assembly_code
+                        .lines()
+                        .skip(line)
+                        .next()
+                        .unwrap()
+                };
+    
+                println!("Executing {}", l.trim());
+                if l.trim().contains("far_call") {
+                    println!("Breakpoint");
+                }
             }
         }
     }
@@ -120,6 +125,7 @@ impl<'a> Tracer for DebugTracerWithAssembly<'a> {
         _data: AfterExecutionData,
         _memory: &Self::SupportedMemory,
     ) {
+        self.current_code_address = state.vm_local_state.callstack.get_current_stack().code_address;
         if get_tracing_mode() != VmTracingOptions::ManualVerbose {
             return;
         }

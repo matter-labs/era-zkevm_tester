@@ -572,6 +572,8 @@ pub async fn run_vm_multi_contracts(
     //         .collect::<Vec<_>>(),
     // );
 
+    let all_contracts_mapping = contracts.clone();
+
     let (initial_pc, set_far_call_props) = match &vm_launch_option {
         VmLaunchOption::Pc(pc) => (*pc, false),
         VmLaunchOption::Label(label) => {
@@ -781,7 +783,8 @@ pub async fn run_vm_multi_contracts(
             vm.witness_tracer.is_dummy = true;
             use crate::runners::debug_tracer::DebugTracerWithAssembly;
             let mut tracer = DebugTracerWithAssembly {
-                assembly: &initial_assembly,
+                current_code_address: entry_address,
+                code_address_to_assembly: all_contracts_mapping,
             };
             for _ in 0..cycles_limit {
                 vm.cycle(&mut tracer);
