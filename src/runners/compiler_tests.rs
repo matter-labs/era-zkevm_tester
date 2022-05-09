@@ -183,6 +183,23 @@ pub(crate) fn dump_memory_page_using_abi(
     // let length = r2.0[0] as usize;
     assert!(offset < (1u32 << 24) as usize);
     assert!(length < (1u32 << 24) as usize);
+
+    dump_memory_page_by_offset_and_length(
+        memory,
+        page,
+        offset as usize,
+        length as usize
+    )
+}
+
+pub(crate) fn dump_memory_page_by_offset_and_length(
+    memory: &SimpleHashmapMemory,
+    page: u32,
+    offset: usize,
+    length: usize,
+) -> Vec<u8> {
+    assert!(offset < (1u32 << 24) as usize);
+    assert!(length < (1u32 << 24) as usize);
     let mut dump = Vec::with_capacity(length);
     if length == 0 {
         return dump;

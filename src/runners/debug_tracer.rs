@@ -1,4 +1,4 @@
-use zk_evm::{abstractions::*, testing::memory::SimpleMemory};
+use zk_evm::{abstractions::*, testing::memory::SimpleMemory, vm_state::CallStackEntry};
 use zkevm_assembly::Assembly;
 
 use crate::runners::compiler_tests::{get_tracing_mode, VmTracingOptions};
@@ -93,9 +93,9 @@ impl Tracer for DebugTracerWithAssembly {
                 };
     
                 println!("Executing {}", l.trim());
-                if l.trim().contains("far_call") {
-                    println!("Breakpoint");
-                }
+                // if l.trim().contains("far_call") {
+                //     println!("Breakpoint");
+                // }
             }
         }
     }
@@ -111,12 +111,66 @@ impl Tracer for DebugTracerWithAssembly {
     }
     fn before_execution(
         &mut self,
-        _state: VmLocalStateData<'_>,
-        _data: BeforeExecutionData,
-        _memory: &Self::SupportedMemory,
+        state: VmLocalStateData<'_>,
+        data: BeforeExecutionData,
+        memory: &Self::SupportedMemory,
     ) {
         if get_tracing_mode() != VmTracingOptions::ManualVerbose {
             return;
+        }
+
+        use zk_evm::zkevm_opcode_defs::*;
+
+        match data.opcode.variant.opcode {
+            Opcode::Ret(inner_variant) => {
+                if !state.vm_local_state.callstack.get_current_stack().is_local_frame {
+                    // catch returndata
+                    if inner_variant == RetOpcode::Ok || inner_variant == RetOpcode::Revert {
+                        let src0 = data.src0_value;
+
+                        let ret_abi = RetABI::from_u256(src0);
+                        let forward_returndata = ret_abi.transit_page;
+                        let page = if forward_returndata {
+                            state.vm_local_state.callstack.returndata_page
+                        } else {
+                            CallStackEntry::heap_page_from_base(state.vm_local_state.callstack.get_current_stack().base_memory_page)
+                        };
+
+                        let returndata = crate::runners::compiler_tests::dump_memory_page_by_offset_and_length(
+                            memory,
+                            page.0,
+                            ret_abi.returndata_offset.into_raw() as usize,
+                            ret_abi.returndata_length.into_raw() as usize,
+                        );
+
+                        println!("Performed return/revert with {}", hex::encode(&returndata));
+                    } else {
+                        println!("Returned with PANIC");
+                    }
+                }
+            },
+            Opcode::FarCall(_) => {
+                // catch calldata
+                let src1 = data.src1_value;
+
+                let abi = FarCallABI::from_u256(src1);
+                let forward_returndata = abi.transit_page;
+                let page = if forward_returndata {
+                    state.vm_local_state.callstack.get_current_stack().calldata_page
+                } else {
+                    CallStackEntry::heap_page_from_base(state.vm_local_state.callstack.get_current_stack().base_memory_page)
+                };
+
+                let calldata = crate::runners::compiler_tests::dump_memory_page_by_offset_and_length(
+                    memory,
+                    page.0,
+                    abi.calldata_length.into_raw() as usize,
+                    abi.calldata_length.into_raw() as usize,
+                );
+
+                println!("Performed FARCALL with {}", hex::encode(&calldata));
+            },
+            _ => {}
         }
     }
     fn after_execution(
