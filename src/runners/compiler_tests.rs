@@ -252,7 +252,7 @@ pub(crate) fn dump_memory_page_by_offset_and_length(
     dump
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct StorageKey {
     pub address: Address,
     pub key: U256,
@@ -271,6 +271,25 @@ impl StorageKey {
         let key = U256::from_big_endian(&result.as_slice());
 
         key
+    }
+
+    fn format_as_hex(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StorageKey")
+            .field("address", &format!("{:?}", &self.address))
+            .field("key", &format!("0x{:x}", &self.key))
+            .finish()
+    }
+}
+
+impl std::fmt::Display for StorageKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.format_as_hex(f)
+    }
+}
+
+impl std::fmt::Debug for StorageKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.format_as_hex(f)
     }
 }
 

@@ -1,4 +1,4 @@
-use zk_evm::{abstractions::*, testing::memory::SimpleMemory, vm_state::CallStackEntry};
+use zk_evm::{abstractions::*, testing::memory::SimpleMemory, vm_state::CallStackEntry, u256_to_address_unchecked};
 use zkevm_assembly::Assembly;
 
 use crate::runners::compiler_tests::{get_tracing_mode, VmTracingOptions};
@@ -150,6 +150,8 @@ impl Tracer for DebugTracerWithAssembly {
             },
             Opcode::FarCall(_) => {
                 // catch calldata
+                let src0 = data.src0_value;
+                let dest = u256_to_address_unchecked(&src0);
                 let src1 = data.src1_value;
 
                 let abi = FarCallABI::from_u256(src1);
@@ -166,7 +168,7 @@ impl Tracer for DebugTracerWithAssembly {
                     abi.calldata_length.into_raw() as usize,
                 );
 
-                println!("Performed far_call with {} bytes with 0x{}", calldata.len(), hex::encode(&calldata));
+                println!("Performed far_call to {:?} with {} bytes with 0x{}", dest, calldata.len(), hex::encode(&calldata));
             },
             _ => {}
         }
