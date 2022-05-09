@@ -162,8 +162,8 @@ impl Tracer for DebugTracerWithAssembly {
                 let calldata = crate::runners::compiler_tests::dump_memory_page_by_offset_and_length(
                     memory,
                     page.0,
-                    abi.calldata_length.into_raw() as usize,
                     abi.calldata_offset.into_raw() as usize,
+                    abi.calldata_length.into_raw() as usize,
                 );
 
                 println!("Performed far_call with {} bytes with 0x{}", calldata.len(), hex::encode(&calldata));
