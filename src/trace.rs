@@ -3,9 +3,9 @@ use super::*;
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
-use zk_evm::zkevm_opcode_defs::{Opcode, REGISTERS_COUNT};
+use zk_evm::zkevm_opcode_defs::{Opcode, REGISTERS_COUNT, ReturndataABI};
 
-use crate::runners::compiler_tests::VmTracingOptions;
+use crate::runners::compiler_tests::{VmTracingOptions, dump_memory_page_using_abi};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ContractSourceDebugInfo {
@@ -317,6 +317,7 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
         if self.did_call_recently {
             let calldata_offset = state.vm_local_state.registers[0].0[0] as usize;
             let calldata_length = state.vm_local_state.registers[1].0[0] as usize;
+
             let beginning_word = calldata_offset / 32;
             let end = calldata_offset + calldata_length;
             let mut end_word = end / 32;
@@ -345,10 +346,9 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
 
         if self.did_return_recently {
             // get new context
-            let returndata_page = state.vm_local_state.callstack.returndata_page.0;
-            let current_context = state.vm_local_state.callstack.get_current_stack();
-            let returndata_offset = state.vm_local_state.registers[0].0[0] as usize;
-            let returndata_len = state.vm_local_state.registers[1].0[0] as usize;
+            let returndata_abi = ReturndataABI::from_u256(state.vm_local_state.registers[0]);
+            let returndata_offset = returndata_abi.returndata_offset.into_raw() as usize;
+            let returndata_len = returndata_abi.returndata_length.into_raw() as usize;
 
             let beginning_word = returndata_offset / 32;
             let end = returndata_offset + returndata_len;
