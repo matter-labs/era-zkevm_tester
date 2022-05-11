@@ -287,7 +287,7 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
         let registers = state
             .vm_local_state
             .registers
-            .map(|el| format!("0x{:x}", el));
+            .map(|el| format!("0x{:064x}", el));
 
         let error = if let Some(e) = errors.first() {
             Some(e.clone())
@@ -437,7 +437,7 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
                         .copied()
                         .unwrap_or(U256::zero());
 
-                    let value = format!("0x{:x}", value);
+                    let value = format!("0x{:064x}", value);
                     let mem_interaction = MemoryInteraction {
                         memory_type,
                         page,
@@ -513,7 +513,7 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
         trace_step.registers = state
             .vm_local_state
             .registers
-            .map(|el| format!("0x{:x}", el));
+            .map(|el| format!("0x{:064x}", el));
 
         if let Some(mem) = data.dst0_mem_location {
             let MemoryLocation {
@@ -563,7 +563,7 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
                         .copied()
                         .unwrap_or(U256::zero());
 
-                    let value = format!("0x{:x}", value);
+                    let value = format!("0x{:064x}", value);
                     let mem_interaction = MemoryInteraction {
                         memory_type,
                         page,
