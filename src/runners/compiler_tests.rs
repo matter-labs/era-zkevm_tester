@@ -727,13 +727,9 @@ pub async fn run_vm_multi_contracts(
         }
         VmTracingOptions::TraceDump => {
             use crate::trace::*;
-            let debug_info = ContractSourceDebugInfo {
-                assembly_code: initial_assembly.assembly_code.clone(),
-                pc_line_mapping: initial_assembly.pc_line_mapping.clone(),
-                active_lines: std::collections::HashSet::new(),
-            };
 
-            let mut tracer = VmDebugTracer::new(debug_info);
+            let mut tracer = VmDebugTracer::new_from_entry_point(entry_address, &initial_assembly);
+            tracer.add_known_contracts(&all_contracts_mapping);
 
             for _ in 0..cycles_limit {
                 vm.witness_tracer.queries.truncate(0);
@@ -791,7 +787,7 @@ pub async fn run_vm_multi_contracts(
 
             if is_trace_enabled() {
                 let VmDebugTracer {
-                    steps, debug_info, ..
+                    steps, debug_info: debug_infos_map, ..
                 } = tracer;
 
                 let empty_callstack_dummy_debug_info = ContractSourceDebugInfo {
@@ -806,10 +802,13 @@ pub async fn run_vm_multi_contracts(
                     EMPTY_CONTEXT_HEX.to_owned(),
                     empty_callstack_dummy_debug_info,
                 );
-                sources.insert(
-                    format!("0x{}", hex::encode(entry_address.as_bytes())),
-                    debug_info,
-                );
+
+                for (address, info) in debug_infos_map.into_iter() {
+                    sources.insert(
+                        format!("0x{}", hex::encode(address.as_bytes())),
+                        info,
+                    );
+                }
 
                 let full_trace = VmTrace { steps, sources };
                 output_execution_trace(full_trace, entry_address, test_name);

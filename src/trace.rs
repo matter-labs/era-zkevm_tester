@@ -76,82 +76,82 @@ use crate::default_environment::*;
 use crate::runners::compiler_tests::{calldata_to_aligned_data, contract_bytecode_to_words};
 use zk_evm::testing::*;
 
-pub fn run_text_assembly_full_trace(
-    assembly: String,
-    calldata: Vec<u8>,
-    num_cycles: usize,
-) -> VmTrace {
-    let vm_assembly =
-        Assembly::try_from(assembly.clone()).expect("must get a valid assembly as the input");
+// pub fn run_text_assembly_full_trace(
+//     assembly: String,
+//     calldata: Vec<u8>,
+//     num_cycles: usize,
+// ) -> VmTrace {
+//     let vm_assembly =
+//         Assembly::try_from(assembly.clone()).expect("must get a valid assembly as the input");
 
-    let empty_callstack_dummy_debug_info = ContractSourceDebugInfo {
-        assembly_code: "nop r0, r0, r0, r0".to_owned(),
-        pc_line_mapping: HashMap::from([(0, 0)]),
-        active_lines: HashSet::from([0]),
-    };
+//     let empty_callstack_dummy_debug_info = ContractSourceDebugInfo {
+//         assembly_code: "nop r0, r0, r0, r0".to_owned(),
+//         pc_line_mapping: HashMap::from([(0, 0)]),
+//         active_lines: HashSet::from([0]),
+//     };
 
-    let debug_info = ContractSourceDebugInfo {
-        assembly_code: vm_assembly.assembly_code.clone(),
-        pc_line_mapping: vm_assembly.pc_line_mapping.clone(),
-        active_lines: HashSet::new(),
-    };
+//     let debug_info = ContractSourceDebugInfo {
+//         assembly_code: vm_assembly.assembly_code.clone(),
+//         pc_line_mapping: vm_assembly.pc_line_mapping.clone(),
+//         active_lines: HashSet::new(),
+//     };
 
-    let assembly = vm_assembly.compile_to_bytecode().unwrap();
+//     let assembly = vm_assembly.compile_to_bytecode().unwrap();
 
-    // let mut tools = create_default_testing_tools();
-    let mut tools = crate::runners::compiler_tests::create_default_testing_tools();
-    let block_properties = create_default_block_properties();
-    // let mut vm = create_vm_with_default_settings(&mut tools, &block_properties);
-    let (mut vm, _) =crate::runners::compiler_tests::create_vm(
-        &mut tools, 
-        &block_properties,
-        VmExecutionContext::default(),
-        vec![],
-        &HashMap::new(),
-        vec![],
-        vec![],
-        HashMap::new(),
-        0,
-    );
+//     // let mut tools = create_default_testing_tools();
+//     let mut tools = crate::runners::compiler_tests::create_default_testing_tools();
+//     let block_properties = create_default_block_properties();
+//     // let mut vm = create_vm_with_default_settings(&mut tools, &block_properties);
+//     let (mut vm, _) =crate::runners::compiler_tests::create_vm(
+//         &mut tools, 
+//         &block_properties,
+//         VmExecutionContext::default(),
+//         vec![],
+//         &HashMap::new(),
+//         vec![],
+//         vec![],
+//         HashMap::new(),
+//         0,
+//     );
 
-    // manually encode LE
-    let opcodes = contract_bytecode_to_words(assembly);
-    let calldata_words = calldata_to_aligned_data(&calldata);
+//     // manually encode LE
+//     let opcodes = contract_bytecode_to_words(assembly);
+//     let calldata_words = calldata_to_aligned_data(&calldata);
 
-    // set registers r1-r4 for external call convension
-    vm.local_state.registers[0] = U256::zero();
-    let mut r2 = U256::zero();
-    r2.0[0] = calldata.len() as u64;
-    vm.local_state.registers[1] = r2;
-    vm.local_state.registers[2] = U256::zero();
-    vm.local_state.registers[3] = U256::zero();
+//     // set registers r1-r4 for external call convension
+//     vm.local_state.registers[0] = U256::zero();
+//     let mut r2 = U256::zero();
+//     r2.0[0] = calldata.len() as u64;
+//     vm.local_state.registers[1] = r2;
+//     vm.local_state.registers[2] = U256::zero();
+//     vm.local_state.registers[3] = U256::zero();
 
-    vm.memory.populate(vec![
-        (ENTRY_POINT_PAGE, opcodes),
-        (CALLDATA_PAGE, calldata_words),
-    ]);
+//     vm.memory.populate(vec![
+//         (ENTRY_POINT_PAGE, opcodes),
+//         (CALLDATA_PAGE, calldata_words),
+//     ]);
 
-    let mut tracer = VmDebugTracer::new(debug_info);
+//     let mut tracer = VmDebugTracer::new(debug_info);
 
-    for _ in 0..num_cycles {
-        vm.cycle(&mut tracer);
-    }
+//     for _ in 0..num_cycles {
+//         vm.cycle(&mut tracer);
+//     }
 
-    let VmDebugTracer {
-        steps, debug_info, ..
-    } = tracer;
+//     let VmDebugTracer {
+//         steps, debug_info, ..
+//     } = tracer;
 
-    let mut sources = HashMap::new();
-    sources.insert(DEFAULT_CALLEE_HEX.to_owned(), debug_info);
-    sources.insert(
-        EMPTY_CONTEXT_HEX.to_owned(),
-        empty_callstack_dummy_debug_info,
-    );
+//     let mut sources = HashMap::new();
+//     sources.insert(DEFAULT_CALLEE_HEX.to_owned(), debug_info);
+//     sources.insert(
+//         EMPTY_CONTEXT_HEX.to_owned(),
+//         empty_callstack_dummy_debug_info,
+//     );
 
-    let full_trace = VmTrace { steps, sources };
+//     let full_trace = VmTrace { steps, sources };
 
-    full_trace
-}
+//     full_trace
+// }
 
 fn error_flags_into_description(flags: &ErrorFlags) -> Vec<String> {
     if flags.is_empty() {
@@ -187,7 +187,7 @@ fn flags_into_description(flags: &Flags) -> Vec<String> {
 }
 
 pub struct VmDebugTracer {
-    pub debug_info: ContractSourceDebugInfo,
+    pub debug_info: HashMap<Address, ContractSourceDebugInfo>,
     regs_before: Option<[U256; REGISTERS_COUNT]>,
     aux_info: Option<AfterDecodingData>,
     callstack_info: Option<CallStackEntry>,
@@ -204,9 +204,18 @@ impl std::fmt::Debug for VmDebugTracer {
 }
 
 impl VmDebugTracer {
-    pub fn new(debug_info: ContractSourceDebugInfo) -> Self {
+    pub fn new_from_entry_point(entry_address: Address, source: &Assembly) -> Self {
+        let debug_info = ContractSourceDebugInfo {
+            assembly_code: source.assembly_code.clone(),
+            pc_line_mapping: source.pc_line_mapping.clone(),
+            active_lines: HashSet::new()
+        };
+
+        let mut initial_info = HashMap::new();
+        initial_info.insert(entry_address, debug_info);
+
         Self {
-            debug_info,
+            debug_info: initial_info,
             regs_before: None,
             aux_info: None,
             callstack_info: None,
@@ -215,6 +224,17 @@ impl VmDebugTracer {
             cycle_number: 0u32,
             steps: vec![],
         }
+    }
+    pub fn add_known_contracts(&mut self, other_contracts: &HashMap<Address, Assembly>) {
+        self.debug_info.extend(other_contracts.clone().into_iter().map(|(k, v)| {
+            let info = ContractSourceDebugInfo {
+                assembly_code: v.assembly_code.clone(),
+                pc_line_mapping: v.pc_line_mapping.clone(),
+                active_lines: HashSet::new()
+            };
+
+            (k, info)
+        }));
     }
 }
 
@@ -248,6 +268,7 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
         let current_context = state.vm_local_state.callstack.get_current_stack();
         let current_pc = current_context.pc;
         let current_sp = current_context.sp;
+        let code_address = current_context.code_address;
         let contract_address = format!("0x{:x}", current_context.this_address);
         let code_page = current_context.code_page.0;
         let base_memory_page = current_context.base_memory_page.0;
@@ -255,7 +276,10 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
         let returndata_page = state.vm_local_state.callstack.returndata_page.0;
         self.callstack_info = Some(current_context.clone());
         drop(current_context);
-        self.debug_info.active_lines.insert(current_pc as usize);
+        if let Some(info) = self.debug_info.get_mut(&code_address) {
+            info.active_lines.insert(current_pc as usize);
+        }
+        // self.debug_info.active_lines.insert(current_pc as usize);
         let flags = flags_into_description(&state.vm_local_state.flags);
 
         self.regs_before = Some(state.vm_local_state.registers);
@@ -879,23 +903,23 @@ __selector:
 	.note.GNU-stack
     "#;
 
-    #[test]
-    fn run_something() {
-        use super::*;
+    // #[test]
+    // fn run_something() {
+    //     use super::*;
 
-        let mut input = vec![0u8; 64];
-        input[31] = 1;
-        input[63] = 2;
+    //     let mut input = vec![0u8; 64];
+    //     input[31] = 1;
+    //     input[63] = 2;
 
-        let trace = run_text_assembly_full_trace(SIMPLE_ASSEMBLY.to_owned(), input, 12);
+    //     let trace = run_text_assembly_full_trace(SIMPLE_ASSEMBLY.to_owned(), input, 12);
 
-        let _ = std::fs::remove_file("tmp.json");
-        let mut file = std::fs::File::create("tmp.json").unwrap();
-        let json = serde_json::to_string(&trace).unwrap();
+    //     let _ = std::fs::remove_file("tmp.json");
+    //     let mut file = std::fs::File::create("tmp.json").unwrap();
+    //     let json = serde_json::to_string(&trace).unwrap();
 
-        use std::io::Write;
-        file.write_all(json.as_bytes()).unwrap();
-    }
+    //     use std::io::Write;
+    //     file.write_all(json.as_bytes()).unwrap();
+    // }
 
     #[test]
     fn test_manually() {
