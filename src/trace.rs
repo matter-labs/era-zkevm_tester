@@ -288,7 +288,8 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
         let registers = state
             .vm_local_state
             .registers
-            .map(|el| format!("0x{:064x}", el));
+            .map(|el| format!("0x{:x}", el));
+            // .map(|el| format!("0x{:064x}", el));
 
         let error = if let Some(e) = errors.first() {
             Some(e.clone())
@@ -514,7 +515,8 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
         trace_step.registers = state
             .vm_local_state
             .registers
-            .map(|el| format!("0x{:064x}", el));
+            .map(|el| format!("0x{:x}", el));
+            // .map(|el| format!("0x{:064x}", el));
 
         if let Some(mem) = data.dst0_mem_location {
             let MemoryLocation {
