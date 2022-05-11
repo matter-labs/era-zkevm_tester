@@ -1,6 +1,6 @@
+use crate::U256;
 use std::collections::HashMap;
 use zk_evm::abstractions::MEMORY_CELLS_OTHER_PAGES;
-use crate::U256;
 
 #[derive(Debug)]
 pub struct SimpleHashmapMemory {
@@ -112,9 +112,7 @@ impl Memory for SimpleHashmapMemory {
             .inner
             .entry(query.location.page.0)
             .or_insert(HashMap::new());
-        let value = entry
-            .entry(query.location.index.0)
-            .or_insert(U256::zero());
+        let value = entry.entry(query.location.index.0).or_insert(U256::zero());
         if query.rw_flag {
             *value = query.value;
         } else {

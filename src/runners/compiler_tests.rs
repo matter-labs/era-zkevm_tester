@@ -2,6 +2,7 @@ use super::*;
 
 use crate::default_environment::*;
 use crate::runners::events::SolidityLikeEvent;
+use crate::runners::hashmap_based_memory::SimpleHashmapMemory;
 use crate::runners::simple_witness_tracer::MemoryLogWitnessTracer;
 use crate::utils::IntoFixedLengthByteIterator;
 use crate::{Address, H256, U256};
@@ -9,7 +10,6 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Add;
 use std::sync::atomic::AtomicU64;
-use zk_evm::{aux_structures::*, GenericNoopTracer};
 use zk_evm::block_properties::*;
 use zk_evm::opcodes::execution::ret::*;
 use zk_evm::precompiles::DEPLOYER_SYSTEM_CONTRACT_ADDRESS;
@@ -21,8 +21,8 @@ use zk_evm::testing::event_sink::{EventMessage, InMemoryEventSink};
 use zk_evm::testing::memory::SimpleMemory;
 use zk_evm::testing::storage::InMemoryStorage;
 use zk_evm::vm_state::*;
+use zk_evm::{aux_structures::*, GenericNoopTracer};
 use zkevm_assembly::Assembly;
-use crate::runners::hashmap_based_memory::SimpleHashmapMemory;
 
 use sha2::{Digest, Sha256};
 
@@ -184,12 +184,7 @@ pub(crate) fn dump_memory_page_using_abi(
     assert!(offset < (1u32 << 24) as usize);
     assert!(length < (1u32 << 24) as usize);
 
-    dump_memory_page_by_offset_and_length(
-        memory,
-        page,
-        offset as usize,
-        length as usize
-    )
+    dump_memory_page_by_offset_and_length(memory, page, offset as usize, length as usize)
 }
 
 pub(crate) fn dump_memory_page_by_offset_and_length(
@@ -384,7 +379,10 @@ pub fn create_default_testing_tools() -> ExtendedTestingTools<false> {
     let event_sink = InMemoryEventSink::new();
     let precompiles_processor = DefaultPrecompilesProcessor::<false>;
     let decommittment_processor = SimpleDecommitter::<false>::new();
-    let witness_tracer = MemoryLogWitnessTracer { is_dummy: false, queries: vec![] };
+    let witness_tracer = MemoryLogWitnessTracer {
+        is_dummy: false,
+        queries: vec![],
+    };
 
     ExtendedTestingTools::<false> {
         storage,
@@ -463,7 +461,7 @@ pub fn create_vm<'a, const B: bool>(
             0,
             *KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
             bytecode_hash_as_u256,
-            U256::from(1u64)
+            U256::from(1u64),
         ));
     }
 
@@ -754,7 +752,7 @@ pub async fn run_vm_multi_contracts(
 
                     let page = query.location.page.0;
                     let address = query.location.index.0;
-                    let value = format!("{:x}", query.value);
+                    let value = format!("{:064x}", query.value);
                     let direction = if query.rw_flag {
                         crate::trace::MemoryAccessType::Write
                     } else {
@@ -787,7 +785,9 @@ pub async fn run_vm_multi_contracts(
 
             if is_trace_enabled() {
                 let VmDebugTracer {
-                    steps, debug_info: debug_infos_map, ..
+                    steps,
+                    debug_info: debug_infos_map,
+                    ..
                 } = tracer;
 
                 let empty_callstack_dummy_debug_info = ContractSourceDebugInfo {
@@ -804,10 +804,7 @@ pub async fn run_vm_multi_contracts(
                 );
 
                 for (address, info) in debug_infos_map.into_iter() {
-                    sources.insert(
-                        format!("0x{}", hex::encode(address.as_bytes())),
-                        info,
-                    );
+                    sources.insert(format!("0x{}", hex::encode(address.as_bytes())), info);
                 }
 
                 let full_trace = VmTrace { steps, sources };
@@ -949,7 +946,7 @@ pub async fn run_vm_multi_contracts(
         to_l1_messages: l1_messages,
         events,
         serialized_events,
-        num_cycles_used: cycles_used
+        num_cycles_used: cycles_used,
     }
 }
 

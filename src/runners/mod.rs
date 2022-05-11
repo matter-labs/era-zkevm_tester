@@ -1,8 +1,8 @@
 pub mod compiler_tests;
 pub mod debug_tracer;
 pub mod events;
-pub mod simple_witness_tracer;
 pub mod hashmap_based_memory;
+pub mod simple_witness_tracer;
 
 use crate::trace::VmTrace;
 use crate::Address;

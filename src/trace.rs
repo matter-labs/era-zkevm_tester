@@ -103,7 +103,7 @@ use zk_evm::testing::*;
 //     let block_properties = create_default_block_properties();
 //     // let mut vm = create_vm_with_default_settings(&mut tools, &block_properties);
 //     let (mut vm, _) =crate::runners::compiler_tests::create_vm(
-//         &mut tools, 
+//         &mut tools,
 //         &block_properties,
 //         VmExecutionContext::default(),
 //         vec![],
@@ -208,7 +208,7 @@ impl VmDebugTracer {
         let debug_info = ContractSourceDebugInfo {
             assembly_code: source.assembly_code.clone(),
             pc_line_mapping: source.pc_line_mapping.clone(),
-            active_lines: HashSet::new()
+            active_lines: HashSet::new(),
         };
 
         let mut initial_info = HashMap::new();
@@ -226,20 +226,21 @@ impl VmDebugTracer {
         }
     }
     pub fn add_known_contracts(&mut self, other_contracts: &HashMap<Address, Assembly>) {
-        self.debug_info.extend(other_contracts.clone().into_iter().map(|(k, v)| {
-            let info = ContractSourceDebugInfo {
-                assembly_code: v.assembly_code.clone(),
-                pc_line_mapping: v.pc_line_mapping.clone(),
-                active_lines: HashSet::new()
-            };
+        self.debug_info
+            .extend(other_contracts.clone().into_iter().map(|(k, v)| {
+                let info = ContractSourceDebugInfo {
+                    assembly_code: v.assembly_code.clone(),
+                    pc_line_mapping: v.pc_line_mapping.clone(),
+                    active_lines: HashSet::new(),
+                };
 
-            (k, info)
-        }));
+                (k, info)
+            }));
     }
 }
 
-use zk_evm::abstractions::*;
 use crate::runners::hashmap_based_memory::SimpleHashmapMemory;
+use zk_evm::abstractions::*;
 
 impl zk_evm::abstractions::Tracer for VmDebugTracer {
     const CALL_BEFORE_DECODING: bool = false;
@@ -2571,10 +2572,10 @@ CPI1_11:
         dbg!(ctx.this_address);
         run_inner_with_context(
             hex::decode("00").unwrap(),
-            // hex::decode("00ff").unwrap(), 
+            // hex::decode("00ff").unwrap(),
             VmLaunchOption::Default,
             SHA256_SYSTEM_ASM,
-            ctx
+            ctx,
         );
     }
 
@@ -2732,21 +2733,19 @@ CPI1_7:
         ctx.this_address = Address::from_low_u64_be(0x12);
         dbg!(ctx.msg_sender);
         dbg!(ctx.this_address);
-        let hash = hex::decode("1da44b586eb0729ff70a73c326926f6ed5a25f5b056e7f47fbc6e58d86871655").unwrap();
+        let hash = hex::decode("1da44b586eb0729ff70a73c326926f6ed5a25f5b056e7f47fbc6e58d86871655")
+            .unwrap();
         let recovery_byte = 0x1c;
-        let r = hex::decode("b91467e570a6466aa9e9876cbcd013baba02900b8979d43fe208a4a4f339f5fd").unwrap();
-        let s = hex::decode("6007e74cd82e037b800186422fc2da167c747ef045e5d18a5f5d4300f8e1a029").unwrap();
+        let r = hex::decode("b91467e570a6466aa9e9876cbcd013baba02900b8979d43fe208a4a4f339f5fd")
+            .unwrap();
+        let s = hex::decode("6007e74cd82e037b800186422fc2da167c747ef045e5d18a5f5d4300f8e1a029")
+            .unwrap();
         let mut calldata = hash;
         calldata.extend(std::iter::repeat(0x00).take(31));
         calldata.push(recovery_byte);
         calldata.extend(r);
         calldata.extend(s);
 
-        run_inner_with_context(
-            calldata,
-            VmLaunchOption::Default,
-            ECRECOVER_SYSTEM_ASM,
-            ctx
-        );
+        run_inner_with_context(calldata, VmLaunchOption::Default, ECRECOVER_SYSTEM_ASM, ctx);
     }
 }

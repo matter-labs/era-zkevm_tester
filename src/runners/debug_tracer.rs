@@ -1,4 +1,7 @@
-use zk_evm::{abstractions::*, testing::memory::SimpleMemory, vm_state::CallStackEntry, u256_to_address_unchecked};
+use zk_evm::{
+    abstractions::*, testing::memory::SimpleMemory, u256_to_address_unchecked,
+    vm_state::CallStackEntry,
+};
 use zkevm_assembly::Assembly;
 
 use crate::runners::compiler_tests::{get_tracing_mode, VmTracingOptions};
@@ -79,19 +82,17 @@ impl Tracer for DebugTracerWithAssembly {
         }
         println!("New cycle -------------------------");
         let pc = state.vm_local_state.callstack.get_current_stack().pc;
-        if let Some(assembly) = self.code_address_to_assembly.get(&self.current_code_address) {
+        if let Some(assembly) = self
+            .code_address_to_assembly
+            .get(&self.current_code_address)
+        {
             if let Some(line) = assembly.pc_line_mapping.get(&(pc as usize)).copied() {
                 let l = if line == 0 {
                     assembly.assembly_code.lines().next().unwrap()
                 } else {
-                    assembly
-                        .assembly_code
-                        .lines()
-                        .skip(line)
-                        .next()
-                        .unwrap()
+                    assembly.assembly_code.lines().skip(line).next().unwrap()
                 };
-    
+
                 println!("Executing {}", l.trim());
                 // if l.trim().contains("far_call") {
                 //     println!("Breakpoint");
@@ -123,7 +124,12 @@ impl Tracer for DebugTracerWithAssembly {
 
         match data.opcode.variant.opcode {
             Opcode::Ret(inner_variant) => {
-                if !state.vm_local_state.callstack.get_current_stack().is_local_frame {
+                if !state
+                    .vm_local_state
+                    .callstack
+                    .get_current_stack()
+                    .is_local_frame
+                {
                     // catch returndata
                     if inner_variant == RetOpcode::Ok || inner_variant == RetOpcode::Revert {
                         let src0 = data.src0_value;
@@ -132,22 +138,33 @@ impl Tracer for DebugTracerWithAssembly {
                         let page = if abi.transit_page {
                             state.vm_local_state.callstack.returndata_page
                         } else {
-                            CallStackEntry::heap_page_from_base(state.vm_local_state.callstack.get_current_stack().base_memory_page)
+                            CallStackEntry::heap_page_from_base(
+                                state
+                                    .vm_local_state
+                                    .callstack
+                                    .get_current_stack()
+                                    .base_memory_page,
+                            )
                         };
 
-                        let returndata = crate::runners::compiler_tests::dump_memory_page_by_offset_and_length(
-                            memory,
-                            page.0,
-                            abi.returndata_offset.into_raw() as usize,
-                            abi.returndata_length.into_raw() as usize,
-                        );
+                        let returndata =
+                            crate::runners::compiler_tests::dump_memory_page_by_offset_and_length(
+                                memory,
+                                page.0,
+                                abi.returndata_offset.into_raw() as usize,
+                                abi.returndata_length.into_raw() as usize,
+                            );
 
-                        println!("Performed return/revert with {} bytes with 0x{}", returndata.len(), hex::encode(&returndata));
+                        println!(
+                            "Performed return/revert with {} bytes with 0x{}",
+                            returndata.len(),
+                            hex::encode(&returndata)
+                        );
                     } else {
                         println!("Returned with PANIC");
                     }
                 }
-            },
+            }
             Opcode::FarCall(_) => {
                 // catch calldata
                 let src0 = data.src0_value;
@@ -156,20 +173,36 @@ impl Tracer for DebugTracerWithAssembly {
 
                 let abi = FarCallABI::from_u256(src1);
                 let page = if abi.transit_page {
-                    state.vm_local_state.callstack.get_current_stack().calldata_page
+                    state
+                        .vm_local_state
+                        .callstack
+                        .get_current_stack()
+                        .calldata_page
                 } else {
-                    CallStackEntry::heap_page_from_base(state.vm_local_state.callstack.get_current_stack().base_memory_page)
+                    CallStackEntry::heap_page_from_base(
+                        state
+                            .vm_local_state
+                            .callstack
+                            .get_current_stack()
+                            .base_memory_page,
+                    )
                 };
 
-                let calldata = crate::runners::compiler_tests::dump_memory_page_by_offset_and_length(
-                    memory,
-                    page.0,
-                    abi.calldata_offset.into_raw() as usize,
-                    abi.calldata_length.into_raw() as usize,
-                );
+                let calldata =
+                    crate::runners::compiler_tests::dump_memory_page_by_offset_and_length(
+                        memory,
+                        page.0,
+                        abi.calldata_offset.into_raw() as usize,
+                        abi.calldata_length.into_raw() as usize,
+                    );
 
-                println!("Performed far_call to {:?} with {} bytes with 0x{}", dest, calldata.len(), hex::encode(&calldata));
-            },
+                println!(
+                    "Performed far_call to {:?} with {} bytes with 0x{}",
+                    dest,
+                    calldata.len(),
+                    hex::encode(&calldata)
+                );
+            }
             _ => {}
         }
     }
@@ -179,7 +212,11 @@ impl Tracer for DebugTracerWithAssembly {
         _data: AfterExecutionData,
         _memory: &Self::SupportedMemory,
     ) {
-        self.current_code_address = state.vm_local_state.callstack.get_current_stack().code_address;
+        self.current_code_address = state
+            .vm_local_state
+            .callstack
+            .get_current_stack()
+            .code_address;
         if get_tracing_mode() != VmTracingOptions::ManualVerbose {
             return;
         }
