@@ -138,21 +138,6 @@ impl MemoryArea {
     }
 }
 
-pub fn hash_contract_code(code: &Vec<[u8; 32]>) -> H256 {
-    let mut hasher = Sha256::new();
-    for code_word in code.iter() {
-        hasher.update(code_word);
-    }
-
-    H256::from_slice(hasher.finalize().as_slice())
-}
-
-pub fn contract_bytecode_to_words(code: Vec<[u8; 32]>) -> Vec<U256> {
-    code.into_iter()
-        .map(|el| U256::from_little_endian(&el))
-        .collect()
-}
-
 pub fn calldata_to_aligned_data(calldata: &Vec<u8>) -> Vec<U256> {
     let mut capacity = calldata.len() / 32;
     if calldata.len() % 32 != 0 {
@@ -417,6 +402,7 @@ pub fn create_vm<'a, const B: bool>(
     HashMap<U256, Assembly>,
 ) {
     use zk_evm::utils::bytecode_to_code_hash;
+    use zk_evm::contract_bytecode_to_words;
     // fill the decommitter and storage slots with contract codes, etc
 
     // first deployed contracts. Those are stored under DEPLOYER_CONTRACT as raw address -> hash
@@ -427,7 +413,7 @@ pub fn create_vm<'a, const B: bool>(
         .map(|(k, v)| {
             (
                 U256::from_big_endian(k.as_bytes()),
-                contract_bytecode_to_words(v),
+                contract_bytecode_to_words(&v),
             )
         })
         .collect();
@@ -446,7 +432,7 @@ pub fn create_vm<'a, const B: bool>(
         reverse_lookup_for_assembly.insert(bytecode_hash_as_u256, assembly.clone());
 
         // add to decommitter
-        let bytecode_words = contract_bytecode_to_words(bytecode);
+        let bytecode_words = contract_bytecode_to_words(&bytecode);
         let _existing = factory_deps.insert(bytecode_hash_as_u256, bytecode_words);
 
         // we write into DEPLOYER that for key == address we have bytecode == bytecode hash
@@ -470,13 +456,13 @@ pub fn create_vm<'a, const B: bool>(
             .compile_to_bytecode()
             .expect("must compile an assembly");
         let bytecode_hash = bytecode_to_code_hash(&bytecode).unwrap();
-        let bytecode_words = contract_bytecode_to_words(bytecode);
+        let bytecode_words = contract_bytecode_to_words(&bytecode);
         let _ = factory_deps.insert(U256::from_big_endian(&bytecode_hash), bytecode_words);
     }
 
     for bytecode in known_bytecodes.into_iter() {
         let bytecode_hash = bytecode_to_code_hash(&bytecode).unwrap();
-        let bytecode_words = contract_bytecode_to_words(bytecode);
+        let bytecode_words = contract_bytecode_to_words(&bytecode);
         let _ = factory_deps.insert(U256::from_big_endian(&bytecode_hash), bytecode_words);
     }
 
@@ -629,13 +615,14 @@ pub async fn run_vm_multi_contracts(
     let mut block_properties = create_default_block_properties();
 
     let calldata_length = calldata.len();
+    use zk_evm::contract_bytecode_to_words;
 
     // fill the calldata
     let aligned_calldata = calldata_to_aligned_data(&calldata);
     // and initial memory page
     let initial_assembly = contracts.get(&entry_address).cloned().unwrap();
     let initial_bytecode = initial_assembly.clone().compile_to_bytecode().unwrap();
-    let initial_bytecode_as_memory = contract_bytecode_to_words(initial_bytecode);
+    let initial_bytecode_as_memory = contract_bytecode_to_words(&initial_bytecode);
 
     tools.memory.populate(vec![
         (CALLDATA_PAGE, aligned_calldata),

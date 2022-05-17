@@ -73,7 +73,7 @@ pub struct VmTrace {
 }
 
 use crate::default_environment::*;
-use crate::runners::compiler_tests::{calldata_to_aligned_data, contract_bytecode_to_words};
+use crate::runners::compiler_tests::{calldata_to_aligned_data};
 use zk_evm::testing::*;
 
 // pub fn run_text_assembly_full_trace(
