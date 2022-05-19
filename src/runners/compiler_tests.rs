@@ -429,7 +429,7 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
     for (address, assembly) in contracts.iter() {
         let bytecode = assembly
             .clone()
-            .compile_to_bytecode::<N, E>()
+            .compile_to_bytecode_for_mode::<N, E>()
             .expect("must compile an assembly");
         let bytecode_hash = bytecode_to_code_hash(&bytecode).unwrap();
         let address_as_u256 = U256::from_big_endian(&address.as_bytes());
@@ -460,7 +460,7 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
     for assembly in known_contracts.into_iter() {
         let mut assembly = assembly;
         let bytecode = assembly
-            .compile_to_bytecode::<N, E>()
+            .compile_to_bytecode_for_mode::<N, E>()
             .expect("must compile an assembly");
         let bytecode_hash = bytecode_to_code_hash(&bytecode).unwrap();
         let bytecode_words = contract_bytecode_to_words(&bytecode);
@@ -593,6 +593,7 @@ pub async fn run_vm_multi_contracts(
     known_bytecodes: Vec<Vec<[u8; 32]>>,
     factory_deps: HashMap<H256, Vec<[u8; 32]>>,
 ) -> VmSnapshot {
+    use zkevm_assembly::{get_encoding_mode, RunningVmEncodingMode};
     let encoding_mode = get_encoding_mode();
     match encoding_mode {
         RunningVmEncodingMode::Production => {
@@ -655,7 +656,7 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
 ) -> VmSnapshot {
     let mut contracts = contracts;
     for (a, c) in contracts.iter_mut() {
-        match c.compile_to_bytecode::<N, E>() {
+        match c.compile_to_bytecode_for_mode::<N, E>() {
             Ok(_) => {}
             Err(e) => {
                 panic!(
@@ -696,7 +697,7 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     let initial_assembly = contracts.get(&entry_address).cloned().unwrap();
     let initial_bytecode = initial_assembly
         .clone()
-        .compile_to_bytecode::<N, E>()
+        .compile_to_bytecode_for_mode::<N, E>()
         .unwrap();
     let initial_bytecode_as_memory = contract_bytecode_to_words(&initial_bytecode);
 
@@ -1014,6 +1015,7 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     }
 }
 
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u64)]
 pub enum VmTracingOptions {
@@ -1045,35 +1047,4 @@ pub fn set_tracing_mode(value: VmTracingOptions) {
 
 pub fn get_tracing_mode() -> VmTracingOptions {
     VmTracingOptions::from_u64(TRACE_MODE.load(std::sync::atomic::Ordering::Relaxed))
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u64)]
-pub enum RunningVmEncodingMode {
-    Production = 0,
-    Testing = 1,
-}
-
-impl RunningVmEncodingMode {
-    pub const fn from_u64(value: u64) -> Self {
-        match value {
-            x if x == Self::Production as u64 => Self::Production,
-            x if x == Self::Testing as u64 => Self::Testing,
-            _ => unreachable!(),
-        }
-    }
-
-    pub const fn as_u64(self) -> u64 {
-        self as u64
-    }
-}
-
-pub static ENCODING_MODE: AtomicU64 = AtomicU64::new(RunningVmEncodingMode::Production as u64);
-
-pub fn set_encoding_mode(value: RunningVmEncodingMode) {
-    ENCODING_MODE.store(value.as_u64(), std::sync::atomic::Ordering::SeqCst);
-}
-
-pub fn get_encoding_mode() -> RunningVmEncodingMode {
-    RunningVmEncodingMode::from_u64(ENCODING_MODE.load(std::sync::atomic::Ordering::Relaxed))
 }
