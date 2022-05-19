@@ -1,6 +1,9 @@
 use zk_evm::{
-    abstractions::*, testing::memory::SimpleMemory, u256_to_address_unchecked,
+    abstractions::*,
+    testing::memory::SimpleMemory,
+    u256_to_address_unchecked,
     vm_state::CallStackEntry,
+    zkevm_opcode_defs::decoding::{AllowedPcOrImm, EncodingModeProduction, VmEncodingMode},
 };
 use zkevm_assembly::Assembly;
 
@@ -9,9 +12,19 @@ use crate::runners::compiler_tests::{get_tracing_mode, VmTracingOptions};
 use super::hashmap_based_memory::SimpleHashmapMemory;
 
 #[derive(Debug)]
-pub struct DummyVmTracer;
+pub struct DummyVmTracer<const N: usize = 8, E: VmEncodingMode<N> = EncodingModeProduction> {
+    _marker: std::marker::PhantomData<E>,
+}
 
-impl Tracer for DummyVmTracer {
+impl<const N: usize, E: VmEncodingMode<N>> DummyVmTracer<N, E> {
+    pub fn new() -> Self {
+        Self {
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<const N: usize, E: VmEncodingMode<N>> Tracer<N, E> for DummyVmTracer<N, E> {
     const CALL_BEFORE_DECODING: bool = true;
     const CALL_AFTER_DECODING: bool = true;
     const CALL_BEFORE_EXECUTION: bool = true;
@@ -19,7 +32,11 @@ impl Tracer for DummyVmTracer {
 
     type SupportedMemory = SimpleMemory;
 
-    fn before_decoding(&mut self, state: VmLocalStateData<'_>, _memory: &Self::SupportedMemory) {
+    fn before_decoding(
+        &mut self,
+        state: VmLocalStateData<'_, N, E>,
+        _memory: &Self::SupportedMemory,
+    ) {
         if get_tracing_mode() != VmTracingOptions::ManualVerbose {
             return;
         }
@@ -27,8 +44,8 @@ impl Tracer for DummyVmTracer {
     }
     fn after_decoding(
         &mut self,
-        _state: VmLocalStateData<'_>,
-        data: AfterDecodingData,
+        _state: VmLocalStateData<'_, N, E>,
+        data: AfterDecodingData<N, E>,
         _memory: &Self::SupportedMemory,
     ) {
         if get_tracing_mode() != VmTracingOptions::ManualVerbose {
@@ -38,8 +55,8 @@ impl Tracer for DummyVmTracer {
     }
     fn before_execution(
         &mut self,
-        _state: VmLocalStateData<'_>,
-        data: BeforeExecutionData,
+        _state: VmLocalStateData<'_, N, E>,
+        data: BeforeExecutionData<N, E>,
         _memory: &Self::SupportedMemory,
     ) {
         if get_tracing_mode() != VmTracingOptions::ManualVerbose {
@@ -49,8 +66,8 @@ impl Tracer for DummyVmTracer {
     }
     fn after_execution(
         &mut self,
-        _state: VmLocalStateData<'_>,
-        data: AfterExecutionData,
+        _state: VmLocalStateData<'_, N, E>,
+        data: AfterExecutionData<N, E>,
         _memory: &Self::SupportedMemory,
     ) {
         if get_tracing_mode() != VmTracingOptions::ManualVerbose {
@@ -63,12 +80,16 @@ impl Tracer for DummyVmTracer {
 use crate::Address;
 
 #[derive(Debug)]
-pub struct DebugTracerWithAssembly {
+pub struct DebugTracerWithAssembly<
+    const N: usize = 8,
+    E: VmEncodingMode<N> = EncodingModeProduction,
+> {
     pub current_code_address: Address,
     pub code_address_to_assembly: std::collections::HashMap<Address, Assembly>,
+    pub _marker: std::marker::PhantomData<E>,
 }
 
-impl Tracer for DebugTracerWithAssembly {
+impl<const N: usize, E: VmEncodingMode<N>> Tracer<N, E> for DebugTracerWithAssembly<N, E> {
     const CALL_BEFORE_DECODING: bool = true;
     const CALL_AFTER_DECODING: bool = true;
     const CALL_BEFORE_EXECUTION: bool = true;
@@ -76,7 +97,11 @@ impl Tracer for DebugTracerWithAssembly {
 
     type SupportedMemory = SimpleHashmapMemory;
 
-    fn before_decoding(&mut self, state: VmLocalStateData<'_>, _memory: &Self::SupportedMemory) {
+    fn before_decoding(
+        &mut self,
+        state: VmLocalStateData<'_, N, E>,
+        _memory: &Self::SupportedMemory,
+    ) {
         if get_tracing_mode() != VmTracingOptions::ManualVerbose {
             return;
         }
@@ -86,7 +111,11 @@ impl Tracer for DebugTracerWithAssembly {
             .code_address_to_assembly
             .get(&self.current_code_address)
         {
-            if let Some(line) = assembly.pc_line_mapping.get(&(pc as usize)).copied() {
+            if let Some(line) = assembly
+                .pc_line_mapping
+                .get(&(pc.as_u64() as usize))
+                .copied()
+            {
                 let l = if line == 0 {
                     assembly.assembly_code.lines().next().unwrap()
                 } else {
@@ -102,8 +131,8 @@ impl Tracer for DebugTracerWithAssembly {
     }
     fn after_decoding(
         &mut self,
-        _state: VmLocalStateData<'_>,
-        _data: AfterDecodingData,
+        _state: VmLocalStateData<'_, N, E>,
+        _data: AfterDecodingData<N, E>,
         _memory: &Self::SupportedMemory,
     ) {
         if get_tracing_mode() != VmTracingOptions::ManualVerbose {
@@ -112,8 +141,8 @@ impl Tracer for DebugTracerWithAssembly {
     }
     fn before_execution(
         &mut self,
-        state: VmLocalStateData<'_>,
-        data: BeforeExecutionData,
+        state: VmLocalStateData<'_, N, E>,
+        data: BeforeExecutionData<N, E>,
         memory: &Self::SupportedMemory,
     ) {
         if get_tracing_mode() != VmTracingOptions::ManualVerbose {
@@ -138,7 +167,7 @@ impl Tracer for DebugTracerWithAssembly {
                         let page = if abi.transit_page {
                             state.vm_local_state.callstack.returndata_page
                         } else {
-                            CallStackEntry::heap_page_from_base(
+                            CallStackEntry::<N, E>::heap_page_from_base(
                                 state
                                     .vm_local_state
                                     .callstack
@@ -179,7 +208,7 @@ impl Tracer for DebugTracerWithAssembly {
                         .get_current_stack()
                         .calldata_page
                 } else {
-                    CallStackEntry::heap_page_from_base(
+                    CallStackEntry::<N, E>::heap_page_from_base(
                         state
                             .vm_local_state
                             .callstack
@@ -208,8 +237,8 @@ impl Tracer for DebugTracerWithAssembly {
     }
     fn after_execution(
         &mut self,
-        state: VmLocalStateData<'_>,
-        _data: AfterExecutionData,
+        state: VmLocalStateData<'_, N, E>,
+        _data: AfterExecutionData<N, E>,
         _memory: &Self::SupportedMemory,
     ) {
         self.current_code_address = state

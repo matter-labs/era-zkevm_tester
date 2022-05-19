@@ -3,9 +3,10 @@ use super::*;
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
-use zk_evm::zkevm_opcode_defs::{Opcode, REGISTERS_COUNT, ReturndataABI};
+use zk_evm::zkevm_opcode_defs::decoding::{AllowedPcOrImm, EncodingModeProduction, VmEncodingMode};
+use zk_evm::zkevm_opcode_defs::{Opcode, ReturndataABI, REGISTERS_COUNT};
 
-use crate::runners::compiler_tests::{VmTracingOptions, dump_memory_page_using_abi};
+use crate::runners::compiler_tests::{dump_memory_page_using_abi, VmTracingOptions};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ContractSourceDebugInfo {
@@ -18,8 +19,8 @@ pub struct ContractSourceDebugInfo {
 pub struct VmExecutionStep {
     pub contract_address: String,
     pub registers: [String; REGISTERS_COUNT],
-    pub pc: u16,
-    pub sp: u16,
+    pub pc: u32,
+    pub sp: u32,
     pub set_flags: Vec<String>,
     pub skip_cycle: bool,
     pub code_page_index: u32,
@@ -73,7 +74,7 @@ pub struct VmTrace {
 }
 
 use crate::default_environment::*;
-use crate::runners::compiler_tests::{calldata_to_aligned_data};
+use crate::runners::compiler_tests::calldata_to_aligned_data;
 use zk_evm::testing::*;
 
 // pub fn run_text_assembly_full_trace(
@@ -186,24 +187,24 @@ fn flags_into_description(flags: &Flags) -> Vec<String> {
     result
 }
 
-pub struct VmDebugTracer {
+pub struct VmDebugTracer<const N: usize = 8, E: VmEncodingMode<N> = EncodingModeProduction> {
     pub debug_info: HashMap<Address, ContractSourceDebugInfo>,
     regs_before: Option<[U256; REGISTERS_COUNT]>,
-    aux_info: Option<AfterDecodingData>,
-    callstack_info: Option<CallStackEntry>,
+    aux_info: Option<AfterDecodingData<N, E>>,
+    callstack_info: Option<CallStackEntry<N, E>>,
     cycle_number: u32,
     did_call_recently: bool,
     did_return_recently: bool,
     pub steps: Vec<VmExecutionStep>,
 }
 
-impl std::fmt::Debug for VmDebugTracer {
+impl<const N: usize, E: VmEncodingMode<N>> std::fmt::Debug for VmDebugTracer<N, E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VmDebugTracer").finish()
     }
 }
 
-impl VmDebugTracer {
+impl<const N: usize, E: VmEncodingMode<N>> VmDebugTracer<N, E> {
     pub fn new_from_entry_point(entry_address: Address, source: &Assembly) -> Self {
         let debug_info = ContractSourceDebugInfo {
             assembly_code: source.assembly_code.clone(),
@@ -242,7 +243,9 @@ impl VmDebugTracer {
 use crate::runners::hashmap_based_memory::SimpleHashmapMemory;
 use zk_evm::abstractions::*;
 
-impl zk_evm::abstractions::Tracer for VmDebugTracer {
+impl<const N: usize, E: VmEncodingMode<N>> zk_evm::abstractions::Tracer<N, E>
+    for VmDebugTracer<N, E>
+{
     const CALL_BEFORE_DECODING: bool = false;
     const CALL_AFTER_DECODING: bool = true;
     const CALL_BEFORE_EXECUTION: bool = true;
@@ -250,11 +253,16 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
 
     type SupportedMemory = SimpleHashmapMemory;
 
-    fn before_decoding(&mut self, _state: VmLocalStateData<'_>, _memory: &Self::SupportedMemory) {}
+    fn before_decoding(
+        &mut self,
+        _state: VmLocalStateData<'_, N, E>,
+        _memory: &Self::SupportedMemory,
+    ) {
+    }
     fn after_decoding(
         &mut self,
-        state: VmLocalStateData<'_>,
-        data: AfterDecodingData,
+        state: VmLocalStateData<'_, N, E>,
+        data: AfterDecodingData<N, E>,
         memory: &Self::SupportedMemory,
     ) {
         debug_assert!(self.aux_info.is_none());
@@ -278,7 +286,7 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
         self.callstack_info = Some(current_context.clone());
         drop(current_context);
         if let Some(info) = self.debug_info.get_mut(&code_address) {
-            info.active_lines.insert(current_pc as usize);
+            info.active_lines.insert(current_pc.as_u64() as usize);
         }
         // self.debug_info.active_lines.insert(current_pc as usize);
         let flags = flags_into_description(&state.vm_local_state.flags);
@@ -289,7 +297,7 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
             .vm_local_state
             .registers
             .map(|el| format!("0x{:x}", el));
-            // .map(|el| format!("0x{:064x}", el));
+        // .map(|el| format!("0x{:064x}", el));
 
         let error = if let Some(e) = errors.first() {
             Some(e.clone())
@@ -299,13 +307,19 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
         let mut trace_step = VmExecutionStep {
             contract_address,
             registers,
-            pc: current_pc,
-            sp: current_sp,
+            pc: current_pc.as_u64() as u32,
+            sp: current_sp.as_u64() as u32,
             set_flags: flags,
             skip_cycle,
             code_page_index: code_page,
-            heap_page_index: CallStackEntry::heap_page_from_base(MemoryPage(base_memory_page)).0,
-            stack_page_index: CallStackEntry::stack_page_from_base(MemoryPage(base_memory_page)).0,
+            heap_page_index: CallStackEntry::<N, E>::heap_page_from_base(MemoryPage(
+                base_memory_page,
+            ))
+            .0,
+            stack_page_index: CallStackEntry::<N, E>::stack_page_from_base(MemoryPage(
+                base_memory_page,
+            ))
+            .0,
             calldata_page_index: calldata_page,
             returndata_page_index: returndata_page,
             register_interactions: HashMap::new(),
@@ -381,8 +395,8 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
     }
     fn before_execution(
         &mut self,
-        state: VmLocalStateData<'_>,
-        data: BeforeExecutionData,
+        state: VmLocalStateData<'_, N, E>,
+        data: BeforeExecutionData<N, E>,
         memory: &Self::SupportedMemory,
     ) {
         let current_context = state.vm_local_state.callstack.get_current_stack();
@@ -401,18 +415,28 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
             let index = index.0;
             let mem_interaction = match page {
                 page if page
-                    == CallStackEntry::heap_page_from_base(MemoryPage(base_memory_page)).0
+                    == CallStackEntry::<N, E>::heap_page_from_base(MemoryPage(
+                        base_memory_page,
+                    ))
+                    .0
                     || page
-                        == CallStackEntry::stack_page_from_base(MemoryPage(base_memory_page)).0
+                        == CallStackEntry::<N, E>::stack_page_from_base(MemoryPage(
+                            base_memory_page,
+                        ))
+                        .0
                     || page == code_page =>
                 {
                     let memory_type = if page
-                        == CallStackEntry::heap_page_from_base(MemoryPage(base_memory_page)).0
+                        == CallStackEntry::<N, E>::heap_page_from_base(MemoryPage(base_memory_page))
+                            .0
                     {
                         assert_eq!(memory_type, zk_evm::abstractions::MemoryType::Heap);
                         MemoryType::heap
                     } else if page
-                        == CallStackEntry::stack_page_from_base(MemoryPage(base_memory_page)).0
+                        == CallStackEntry::<N, E>::stack_page_from_base(MemoryPage(
+                            base_memory_page,
+                        ))
+                        .0
                     {
                         assert_eq!(memory_type, zk_evm::abstractions::MemoryType::Stack);
                         MemoryType::stack
@@ -499,8 +523,8 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
     }
     fn after_execution(
         &mut self,
-        state: VmLocalStateData<'_>,
-        data: AfterExecutionData,
+        state: VmLocalStateData<'_, N, E>,
+        data: AfterExecutionData<N, E>,
         memory: &Self::SupportedMemory,
     ) {
         // let aux = self.aux_info.take().unwrap();
@@ -516,7 +540,7 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
             .vm_local_state
             .registers
             .map(|el| format!("0x{:x}", el));
-            // .map(|el| format!("0x{:064x}", el));
+        // .map(|el| format!("0x{:064x}", el));
 
         if let Some(mem) = data.dst0_mem_location {
             let MemoryLocation {
@@ -528,18 +552,28 @@ impl zk_evm::abstractions::Tracer for VmDebugTracer {
             let index = index.0;
             let mem_interaction = match page {
                 page if page
-                    == CallStackEntry::heap_page_from_base(MemoryPage(base_memory_page)).0
+                    == CallStackEntry::<N, E>::heap_page_from_base(MemoryPage(
+                        base_memory_page,
+                    ))
+                    .0
                     || page
-                        == CallStackEntry::stack_page_from_base(MemoryPage(base_memory_page)).0
+                        == CallStackEntry::<N, E>::stack_page_from_base(MemoryPage(
+                            base_memory_page,
+                        ))
+                        .0
                     || page == code_page =>
                 {
                     let memory_type = if page
-                        == CallStackEntry::heap_page_from_base(MemoryPage(base_memory_page)).0
+                        == CallStackEntry::<N, E>::heap_page_from_base(MemoryPage(base_memory_page))
+                            .0
                     {
                         assert_eq!(memory_type, zk_evm::abstractions::MemoryType::Heap);
                         MemoryType::heap
                     } else if page
-                        == CallStackEntry::stack_page_from_base(MemoryPage(base_memory_page)).0
+                        == CallStackEntry::<N, E>::stack_page_from_base(MemoryPage(
+                            base_memory_page,
+                        ))
+                        .0
                     {
                         assert_eq!(memory_type, zk_evm::abstractions::MemoryType::Stack);
                         MemoryType::stack

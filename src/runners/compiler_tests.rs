@@ -21,6 +21,10 @@ use zk_evm::testing::event_sink::{EventMessage, InMemoryEventSink};
 use zk_evm::testing::memory::SimpleMemory;
 use zk_evm::testing::storage::InMemoryStorage;
 use zk_evm::vm_state::*;
+use zk_evm::zkevm_opcode_defs::decoding::AllowedPcOrImm;
+use zk_evm::zkevm_opcode_defs::decoding::{
+    EncodingModeProduction, EncodingModeTesting, VmEncodingMode,
+};
 use zk_evm::{aux_structures::*, GenericNoopTracer};
 use zkevm_assembly::Assembly;
 
@@ -29,7 +33,7 @@ use sha2::{Digest, Sha256};
 #[derive(Debug, Clone, PartialEq, PartialOrd, Hash)]
 pub enum VmLaunchOption {
     Default,
-    Pc(u16),
+    Pc(u32),
     Label(String),
     Call,
     Constructor,
@@ -40,7 +44,7 @@ pub enum VmExecutionResult {
     Ok(Vec<u8>),
     Revert(Vec<u8>),
     Panic,
-    MostLikelyDidNotFinish(Address, u16),
+    MostLikelyDidNotFinish(Address, u64),
 }
 
 #[derive(Debug, Default)]
@@ -280,7 +284,7 @@ pub struct VmSnapshot {
     pub timestamp: u32,
     pub memory_page_counter: u32,
     pub tx_number_in_block: u16,
-    pub previous_super_pc: u16,
+    pub previous_super_pc: u32,
     pub did_call_or_ret_recently: bool,
     pub tx_origin: Address,
     pub calldata_area_dump: MemoryArea,
@@ -379,7 +383,7 @@ pub fn create_default_testing_tools() -> ExtendedTestingTools<false> {
     }
 }
 
-pub fn create_vm<'a, const B: bool>(
+pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
     tools: &'a mut ExtendedTestingTools<B>,
     block_properties: &'a BlockProperties,
     context: VmExecutionContext,
@@ -388,7 +392,7 @@ pub fn create_vm<'a, const B: bool>(
     known_contracts: Vec<Assembly>,
     known_bytecodes: Vec<Vec<[u8; 32]>>,
     factory_deps: HashMap<H256, Vec<[u8; 32]>>,
-    initial_pc: u16,
+    initial_pc: E::PcOrImm,
 ) -> (
     VmState<
         'a,
@@ -398,11 +402,13 @@ pub fn create_vm<'a, const B: bool>(
         DefaultPrecompilesProcessor<B>,
         SimpleDecommitter<B>,
         MemoryLogWitnessTracer,
+        N,
+        E,
     >,
     HashMap<U256, Assembly>,
 ) {
-    use zk_evm::utils::bytecode_to_code_hash;
     use zk_evm::contract_bytecode_to_words;
+    use zk_evm::utils::bytecode_to_code_hash;
     // fill the decommitter and storage slots with contract codes, etc
 
     // first deployed contracts. Those are stored under DEPLOYER_CONTRACT as raw address -> hash
@@ -423,7 +429,7 @@ pub fn create_vm<'a, const B: bool>(
     for (address, assembly) in contracts.iter() {
         let bytecode = assembly
             .clone()
-            .compile_to_bytecode()
+            .compile_to_bytecode::<N, E>()
             .expect("must compile an assembly");
         let bytecode_hash = bytecode_to_code_hash(&bytecode).unwrap();
         let address_as_u256 = U256::from_big_endian(&address.as_bytes());
@@ -452,8 +458,9 @@ pub fn create_vm<'a, const B: bool>(
     }
 
     for assembly in known_contracts.into_iter() {
+        let mut assembly = assembly;
         let bytecode = assembly
-            .compile_to_bytecode()
+            .compile_to_bytecode::<N, E>()
             .expect("must compile an assembly");
         let bytecode_hash = bytecode_to_code_hash(&bytecode).unwrap();
         let bytecode_words = contract_bytecode_to_words(&bytecode);
@@ -493,9 +500,9 @@ pub fn create_vm<'a, const B: bool>(
         code_page: MemoryPage(ENTRY_POINT_PAGE),
         calldata_page: MemoryPage(CALLDATA_PAGE),
         // returndata_page: MemoryPage(0),
-        sp: 0u16,
+        sp: E::PcOrImm::from_u64_clipped(0),
         pc: initial_pc,
-        exception_handler_location: u16::MAX,
+        exception_handler_location: E::PcOrImm::max(),
         ergs_remaining: u32::MAX,
         this_shard_id: 0,
         caller_shard_id: 0,
@@ -513,7 +520,7 @@ pub fn create_vm<'a, const B: bool>(
     (vm, reverse_lookup_for_assembly)
 }
 
-pub(crate) fn vm_may_have_ended<'a, const B: bool>(
+pub(crate) fn vm_may_have_ended<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
     vm: &VmState<
         'a,
         InMemoryStorage,
@@ -522,6 +529,8 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool>(
         DefaultPrecompilesProcessor<B>,
         SimpleDecommitter<B>,
         MemoryLogWitnessTracer,
+        N,
+        E,
     >,
 ) -> Option<VmExecutionResult> {
     let execution_has_ended = vm.execution_has_ended();
@@ -538,9 +547,10 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool>(
     let returndata_page = vm.local_state.callstack.returndata_page;
     let current_address = vm.local_state.callstack.get_current_stack().this_address;
 
+    let outer_eh_location = E::PcOrImm::max().as_u64();
     match (
         execution_has_ended,
-        vm.local_state.callstack.get_current_stack().pc,
+        vm.local_state.callstack.get_current_stack().pc.as_u64(),
     ) {
         (true, 0) => {
             let returndata = dump_memory_page_using_abi(&vm.memory, returndata_page.0, r1, r2);
@@ -548,7 +558,7 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool>(
             Some(VmExecutionResult::Ok(returndata))
         }
         (false, _) => None,
-        (true, u16::MAX) => {
+        (true, l) if l == outer_eh_location => {
             // check r1,r2,r3
             if vm.local_state.flags.overflow_or_less_than_flag {
                 Some(VmExecutionResult::Panic)
@@ -583,19 +593,82 @@ pub async fn run_vm_multi_contracts(
     known_bytecodes: Vec<Vec<[u8; 32]>>,
     factory_deps: HashMap<H256, Vec<[u8; 32]>>,
 ) -> VmSnapshot {
-    // println!(
-    //     "Running multi-instance with calldata {} and initial registers: {:?}",
-    //     hex::encode(&calldata),
-    //     registers
-    //         .iter()
-    //         .map(|el| format!("0x{:x}", el))
-    //         .collect::<Vec<_>>(),
-    // );
+    let encoding_mode = get_encoding_mode();
+    match encoding_mode {
+        RunningVmEncodingMode::Production => {
+            run_vm_multi_contracts_inner::<8, EncodingModeProduction>(
+                test_name,
+                contracts,
+                calldata,
+                storage,
+                registers,
+                entry_address,
+                context,
+                vm_launch_option,
+                cycles_limit,
+                _max_stack_size,
+                known_contracts,
+                known_bytecodes,
+                factory_deps,
+            )
+            .await
+        }
+        RunningVmEncodingMode::Testing => {
+            run_vm_multi_contracts_inner::<16, EncodingModeTesting>(
+                test_name,
+                contracts,
+                calldata,
+                storage,
+                registers,
+                entry_address,
+                context,
+                vm_launch_option,
+                cycles_limit,
+                _max_stack_size,
+                known_contracts,
+                known_bytecodes,
+                factory_deps,
+            )
+            .await
+        }
+    }
+}
 
+///
+/// Used for testing the compiler with multiple contracts.
+///
+#[allow(clippy::too_many_arguments)]
+async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
+    test_name: String,
+    contracts: HashMap<Address, Assembly>,
+    calldata: Vec<u8>,
+    storage: HashMap<StorageKey, H256>,
+    registers: Vec<U256>,
+    entry_address: Address,
+    context: Option<VmExecutionContext>,
+    vm_launch_option: VmLaunchOption,
+    cycles_limit: usize,
+    _max_stack_size: usize,
+    known_contracts: Vec<Assembly>,
+    known_bytecodes: Vec<Vec<[u8; 32]>>,
+    factory_deps: HashMap<H256, Vec<[u8; 32]>>,
+) -> VmSnapshot {
+    let mut contracts = contracts;
+    for (a, c) in contracts.iter_mut() {
+        match c.compile_to_bytecode::<N, E>() {
+            Ok(_) => {}
+            Err(e) => {
+                panic!(
+                    "failed to compile bytecode at address {:?} due to error {}",
+                    a, e
+                );
+            }
+        }
+    }
     let all_contracts_mapping = contracts.clone();
 
     let (initial_pc, set_far_call_props) = match &vm_launch_option {
-        VmLaunchOption::Pc(pc) => (*pc, false),
+        VmLaunchOption::Pc(pc) => (E::PcOrImm::from_u64_clipped(*pc as u64), false),
         VmLaunchOption::Label(label) => {
             let offset = *contracts
                 .get(&entry_address)
@@ -604,11 +677,11 @@ pub async fn run_vm_multi_contracts(
                 .get(label)
                 .unwrap();
 
-            assert!(offset <= u16::MAX as usize);
-
-            (offset as u16, false)
+            (E::PcOrImm::from_u64_clipped(offset as u64), false)
         }
-        VmLaunchOption::Default | VmLaunchOption::Call | VmLaunchOption::Constructor => (0, true),
+        VmLaunchOption::Default | VmLaunchOption::Call | VmLaunchOption::Constructor => {
+            (E::PcOrImm::from_u64_clipped(0u64), true)
+        }
     };
 
     let mut tools = create_default_testing_tools();
@@ -621,7 +694,10 @@ pub async fn run_vm_multi_contracts(
     let aligned_calldata = calldata_to_aligned_data(&calldata);
     // and initial memory page
     let initial_assembly = contracts.get(&entry_address).cloned().unwrap();
-    let initial_bytecode = initial_assembly.clone().compile_to_bytecode().unwrap();
+    let initial_bytecode = initial_assembly
+        .clone()
+        .compile_to_bytecode::<N, E>()
+        .unwrap();
     let initial_bytecode_as_memory = contract_bytecode_to_words(&initial_bytecode);
 
     tools.memory.populate(vec![
@@ -648,7 +724,7 @@ pub async fn run_vm_multi_contracts(
     block_properties.block_timestamp = context.block_timestamp;
 
     // fill the rest
-    let (mut vm, reverse_lookup_for_assembly) = create_vm(
+    let (mut vm, reverse_lookup_for_assembly) = create_vm::<false, N, E>(
         &mut tools,
         &block_properties,
         context,
@@ -804,6 +880,7 @@ pub async fn run_vm_multi_contracts(
             let mut tracer = DebugTracerWithAssembly {
                 current_code_address: entry_address,
                 code_address_to_assembly: all_contracts_mapping,
+                _marker: std::marker::PhantomData,
             };
             for _ in 0..cycles_limit {
                 vm.cycle(&mut tracer);
@@ -824,7 +901,7 @@ pub async fn run_vm_multi_contracts(
         result
     } else {
         let current_address = vm.local_state.callstack.get_current_stack().this_address;
-        let pc = vm.local_state.callstack.get_current_stack().pc;
+        let pc = vm.local_state.callstack.get_current_stack().pc.as_u64();
         VmExecutionResult::MostLikelyDidNotFinish(current_address, pc)
     };
 
@@ -917,7 +994,7 @@ pub async fn run_vm_multi_contracts(
         timestamp: local_state.timestamp,
         memory_page_counter: local_state.memory_page_counter,
         tx_number_in_block: local_state.tx_number_in_block,
-        previous_super_pc: local_state.previous_super_pc,
+        previous_super_pc: local_state.previous_super_pc.as_u64() as u32,
         did_call_or_ret_recently: local_state.did_call_or_ret_recently,
         tx_origin: local_state.tx_origin,
         calldata_area_dump: calldata_mem,
@@ -968,4 +1045,35 @@ pub fn set_tracing_mode(value: VmTracingOptions) {
 
 pub fn get_tracing_mode() -> VmTracingOptions {
     VmTracingOptions::from_u64(TRACE_MODE.load(std::sync::atomic::Ordering::Relaxed))
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u64)]
+pub enum RunningVmEncodingMode {
+    Production = 0,
+    Testing = 1,
+}
+
+impl RunningVmEncodingMode {
+    pub const fn from_u64(value: u64) -> Self {
+        match value {
+            x if x == Self::Production as u64 => Self::Production,
+            x if x == Self::Testing as u64 => Self::Testing,
+            _ => unreachable!(),
+        }
+    }
+
+    pub const fn as_u64(self) -> u64 {
+        self as u64
+    }
+}
+
+pub static ENCODING_MODE: AtomicU64 = AtomicU64::new(RunningVmEncodingMode::Production as u64);
+
+pub fn set_encoding_mode(value: RunningVmEncodingMode) {
+    ENCODING_MODE.store(value.as_u64(), std::sync::atomic::Ordering::SeqCst);
+}
+
+pub fn get_encoding_mode() -> RunningVmEncodingMode {
+    RunningVmEncodingMode::from_u64(ENCODING_MODE.load(std::sync::atomic::Ordering::Relaxed))
 }

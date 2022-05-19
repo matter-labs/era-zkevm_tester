@@ -7,8 +7,9 @@ pub struct MemoryLogWitnessTracer {
 }
 
 use zk_evm::witness_trace::VmWitnessTracer;
+use zk_evm::zkevm_opcode_defs::decoding::VmEncodingMode;
 
-impl VmWitnessTracer for MemoryLogWitnessTracer {
+impl<const N: usize, E: VmEncodingMode<N>> VmWitnessTracer<N, E> for MemoryLogWitnessTracer {
     fn add_memory_query(&mut self, monotonic_cycle_counter: u32, memory_query: MemoryQuery) {
         if self.is_dummy {
             return;
