@@ -465,6 +465,7 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
         let bytecode_hash = bytecode_to_code_hash(&bytecode).unwrap();
         let bytecode_words = contract_bytecode_to_words(&bytecode);
         let _ = factory_deps.insert(U256::from_big_endian(&bytecode_hash), bytecode_words);
+        reverse_lookup_for_assembly.insert(U256::from_big_endian(&bytecode_hash), assembly);
     }
 
     for bytecode in known_bytecodes.into_iter() {
