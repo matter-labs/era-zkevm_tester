@@ -82,7 +82,6 @@ pub fn create_vm_with_default_settings<'a, const B: bool>(
         base_memory_page: MemoryPage(INITIAL_BASE_PAGE),
         code_page: MemoryPage(ENTRY_POINT_PAGE),
         calldata_page: MemoryPage(CALLDATA_PAGE),
-        // returndata_page: MemoryPage(0),
         sp: 0u16,
         pc: 0u16,
         exception_handler_location: 0u16,
@@ -92,6 +91,7 @@ pub fn create_vm_with_default_settings<'a, const B: bool>(
         code_shard_id: 0,
         is_static: false,
         is_local_frame: false,
+        context_u128_value: 0,
     };
 
     // we consider the tested code as a bootloader

@@ -499,7 +499,6 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
         base_memory_page: MemoryPage(INITIAL_BASE_PAGE),
         code_page: MemoryPage(ENTRY_POINT_PAGE),
         calldata_page: MemoryPage(CALLDATA_PAGE),
-        // returndata_page: MemoryPage(0),
         sp: E::PcOrImm::from_u64_clipped(0),
         pc: initial_pc,
         exception_handler_location: E::PcOrImm::max(),
@@ -509,6 +508,7 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
         code_shard_id: 0,
         is_static: false,
         is_local_frame: false,
+        context_u128_value: 0,
     };
 
     // we consider the tested code as a bootloader
