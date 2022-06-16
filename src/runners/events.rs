@@ -98,11 +98,14 @@ pub fn merge_events(events: Vec<EventMessage>) -> Vec<SolidityLikeEvent> {
             } = message;
             // split key as our internal marker. Ignore higher bits
             let mut num_topics = key.0[0] as u32;
-            let data_length = (key.0[0] >> 32) as usize;
+            let mut data_length = (key.0[0] >> 32) as usize;
             let mut buffer = [0u8; 32];
             value.to_big_endian(&mut buffer);
 
-            let (topics, data) = if num_topics == 0 {
+            let (topics, data) = if num_topics == 0 && data_length == 0 {
+                (vec![], vec![])
+            } else if num_topics == 0 {
+                data_length -= 32;
                 (vec![], buffer.to_vec())
             } else {
                 num_topics -= 1;
