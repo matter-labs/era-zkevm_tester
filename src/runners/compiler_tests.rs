@@ -143,6 +143,9 @@ impl MemoryArea {
 }
 
 pub fn calldata_to_aligned_data(calldata: &Vec<u8>) -> Vec<U256> {
+    if calldata.len() == 0 {
+        return vec![];
+    }
     let mut capacity = calldata.len() / 32;
     if calldata.len() % 32 != 0 {
         capacity += 1;
