@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-zk_evm = { git = "https://github.com/matter-labs/zk_evm.git", branch = "v1.1.1" }
-zkevm-assembly = { git = "https://github.com/matter-labs/zkEVM-assembly.git", branch = "v1.1.1" }
+zk_evm = { git = "https://github.com/matter-labs/zk_evm" }
+zkevm-assembly = { git = "https://github.com/matter-labs/zkEVM-assembly" }
 
 # zk_evm = {path = "../zk_evm"}
 # zkevm-assembly = {path = "../zkEVM-assembly"}
