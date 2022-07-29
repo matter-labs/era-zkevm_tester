@@ -1,6 +1,7 @@
 use super::*;
 
 use std::collections::{HashMap, HashSet};
+use std::ops::Add;
 
 use serde::{Deserialize, Serialize};
 use zk_evm::zkevm_opcode_defs::decoding::{AllowedPcOrImm, EncodingModeProduction, VmEncodingMode};
@@ -75,84 +76,99 @@ pub struct VmTrace {
 
 use crate::default_environment::*;
 use crate::runners::compiler_tests::calldata_to_aligned_data;
-use zk_evm::testing::*;
+use zk_evm::{testing::*, bytecode_to_code_hash};
 
-// pub fn run_text_assembly_full_trace(
-//     assembly: String,
-//     calldata: Vec<u8>,
-//     num_cycles: usize,
-// ) -> VmTrace {
-//     let vm_assembly =
-//         Assembly::try_from(assembly.clone()).expect("must get a valid assembly as the input");
+pub fn run_text_assembly_full_trace(
+    assembly: String,
+    calldata: Vec<u8>,
+    num_cycles: usize,
+) -> VmTrace {
+    let mut vm_assembly =
+        Assembly::try_from(assembly.clone()).expect("must get a valid assembly as the input");
 
-//     let empty_callstack_dummy_debug_info = ContractSourceDebugInfo {
-//         assembly_code: "nop r0, r0, r0, r0".to_owned(),
-//         pc_line_mapping: HashMap::from([(0, 0)]),
-//         active_lines: HashSet::from([0]),
-//     };
+    let empty_callstack_dummy_debug_info = ContractSourceDebugInfo {
+        assembly_code: "nop r0, r0, r0, r0".to_owned(),
+        pc_line_mapping: HashMap::from([(0, 0)]),
+        active_lines: HashSet::from([0]),
+    };
 
-//     let debug_info = ContractSourceDebugInfo {
-//         assembly_code: vm_assembly.assembly_code.clone(),
-//         pc_line_mapping: vm_assembly.pc_line_mapping.clone(),
-//         active_lines: HashSet::new(),
-//     };
+    let mut context = VmExecutionContext::default();
+    context.this_address = default_callee_address();
 
-//     let assembly = vm_assembly.compile_to_bytecode().unwrap();
+    // let debug_info = ContractSourceDebugInfo {
+    //     assembly_code: vm_assembly.assembly_code.clone(),
+    //     pc_line_mapping: vm_assembly.pc_line_mapping.clone(),
+    //     active_lines: HashSet::new(),
+    // };
 
-//     // let mut tools = create_default_testing_tools();
-//     let mut tools = crate::runners::compiler_tests::create_default_testing_tools();
-//     let block_properties = create_default_block_properties();
-//     // let mut vm = create_vm_with_default_settings(&mut tools, &block_properties);
-//     let (mut vm, _) =crate::runners::compiler_tests::create_vm(
-//         &mut tools,
-//         &block_properties,
-//         VmExecutionContext::default(),
-//         vec![],
-//         &HashMap::new(),
-//         vec![],
-//         vec![],
-//         HashMap::new(),
-//         0,
-//     );
+    let assembly = vm_assembly.compile_to_bytecode().unwrap();
 
-//     // manually encode LE
-//     let opcodes = contract_bytecode_to_words(assembly);
-//     let calldata_words = calldata_to_aligned_data(&calldata);
+    // let mut tools = create_default_testing_tools();
+    let mut tools = crate::runners::compiler_tests::create_default_testing_tools();
 
-//     // set registers r1-r4 for external call convension
-//     vm.local_state.registers[0] = U256::zero();
-//     let mut r2 = U256::zero();
-//     r2.0[0] = calldata.len() as u64;
-//     vm.local_state.registers[1] = r2;
-//     vm.local_state.registers[2] = U256::zero();
-//     vm.local_state.registers[3] = U256::zero();
+    let initial_bytecode_as_memory = contract_bytecode_to_words(&assembly);
+    let aligned_calldata = calldata_to_aligned_data(&calldata);
 
-//     vm.memory.populate(vec![
-//         (ENTRY_POINT_PAGE, opcodes),
-//         (CALLDATA_PAGE, calldata_words),
-//     ]);
+    tools.memory.populate(vec![
+        (CALLDATA_PAGE, aligned_calldata.clone()),
+        (ENTRY_POINT_PAGE, initial_bytecode_as_memory.clone()),
+    ]);
 
-//     let mut tracer = VmDebugTracer::new(debug_info);
+    let block_properties = create_default_block_properties();
+    // let mut vm = create_vm_with_default_settings(&mut tools, &block_properties);
 
-//     for _ in 0..num_cycles {
-//         vm.cycle(&mut tracer);
-//     }
+    let mut known_contracts = HashMap::new();
+    known_contracts.insert(default_callee_address(), vm_assembly.clone());
 
-//     let VmDebugTracer {
-//         steps, debug_info, ..
-//     } = tracer;
+    let (mut vm, _) = crate::runners::compiler_tests::create_vm::<false, 8, EncodingModeProduction>(
+        &mut tools,
+        &block_properties,
+        context,
+        vec![],
+        &known_contracts,
+        vec![],
+        vec![],
+        HashMap::new(),
+        0,
+    );
 
-//     let mut sources = HashMap::new();
-//     sources.insert(DEFAULT_CALLEE_HEX.to_owned(), debug_info);
-//     sources.insert(
-//         EMPTY_CONTEXT_HEX.to_owned(),
-//         empty_callstack_dummy_debug_info,
-//     );
+    use zk_evm::contract_bytecode_to_words;
 
-//     let full_trace = VmTrace { steps, sources };
+    // set registers r1-r4 for external call convension
+    vm.local_state.registers[0] = U256::zero();
+    let mut r2 = U256::zero();
+    r2.0[0] = calldata.len() as u64;
+    vm.local_state.registers[1] = r2;
+    vm.local_state.registers[2] = U256::zero();
+    vm.local_state.registers[3] = U256::zero();
 
-//     full_trace
-// }
+    let mut tracer = VmDebugTracer::new_from_entry_point(
+        default_callee_address(),
+        &vm_assembly,
+    );
+    tracer.debug_info.insert(
+        Address::default(),
+        empty_callstack_dummy_debug_info
+    );
+    
+    for _ in 0..num_cycles {
+        vm.cycle(&mut tracer);
+    }
+
+    let VmDebugTracer {
+        steps, debug_info, ..
+    } = tracer;
+
+    let mut sources = HashMap::new();
+    for (k, v) in debug_info.into_iter() {
+        let k = format!("{:?}", k);
+        sources.insert(k, v);
+    }
+
+    let full_trace = VmTrace { steps, sources };
+
+    full_trace
+}
 
 fn error_flags_into_description(flags: &ErrorFlags) -> Vec<String> {
     if flags.is_empty() {
@@ -798,165 +814,36 @@ pub mod test {
 
     use super::*;
 
-    // const SIMPLE_ASSEMBLY: &'static str = r#"
-    // .rodata
-    // RET_CONST:
-    //     .cell 4294967296
-    // .text
-    // main:
-    //     add 0, r0, r5
-    //     add 32, r0, r6
-    //     uma.calldata_read r5, r0, r5
-    //     uma.calldata_read r6, r0, r6
-    //     add! r5, r6, r5
-    //     uma.heap_write r0, r5, r0
-    //     add @RET_CONST[0], r0, r1
-    //     ret.ok r1
-    // "#;
-
     const SIMPLE_ASSEMBLY: &'static str = r#"
     .text
-	.file	"Test_26"
-	.rodata.cst32
-	.p2align	5
-CPI0_0:
-	.cell 16777184
-CPI0_1:
-	.cell 16777152
-	.text
-	.globl	__entry
-__entry:
-.func_begin0:
-	nop	stack+=[7]
-	add	@CPI0_0[0], r0, r4
-	uma.heap_write	r4, r1, r0
-	add	@CPI0_1[0], r0, r1
-	uma.heap_write	r1, r2, r0
-	and	1, r3, r2
-	add	0, r0, r1
-	sub!	r2, r1, r2
-	jump.ne	@.BB0_3
-	jump	@.BB0_4
-.BB0_3:
-	add	128, r0, r2
-	add	64, r0, r3
-	uma.heap_write	r3, r2, r0
-	add	@CPI0_0[0], r0, r3
-	uma.heap_write	r3, r2, r0
-	add	@CPI0_1[0], r0, r2
-	uma.heap_write	r2, r1, r0
-	jump	@.BB0_2
-.BB0_4:
-.tmp0:
-	near_call	r0, @__selector, @.BB0_1
-.tmp1:
-.BB0_2:
-	add	@CPI0_0[0], r0, r1
-	uma.heap_read	r1, r0, r1
-	add	@CPI0_1[0], r0, r2
-	uma.heap_read	r2, r0, r2
-	shl.s	32, r2, r2
-	add	r2, r1, r1
-	nop	stack-=[7]
-	ret
-.BB0_1:
-.tmp2:
-	add	96, r0, r1
-	uma.heap_read	r1, r0, r1
-	add	1, r0, r2
-	sub!	r1, r2, r1
-	jump.eq	@.BB0_2
-	jump	@.BB0_5
-.BB0_5:
-	ret.panic r0
-.func_end0:
-
-	.rodata.cst32
-	.p2align	5
-CPI1_0:
-	.cell 16777152
-CPI1_1:
-	.cell 16777184
-CPI1_2:
-	.cell -26959946667150639794667015087019630673637144422540572481103610249216
-CPI1_3:
-	.cell 28023726311554802966544231341579932116438770666993405431137050659635310100480
-CPI1_4:
-	.cell -4
-CPI1_5:
-	.cell 40953307615929575801107647705360601464619672688377251939886941387873771847680
-CPI1_6:
-	.cell 57896044618658097711785492504343953926634992332820282019728792003956564819967
-	.text
-__selector:
-.func_begin1:
-	add	128, r0, r1
-	add	64, r0, r2
-	uma.heap_write	r2, r1, r0
-	add	@CPI1_0[0], r0, r2
-	uma.heap_read	r2, r0, r2
-	add	3, r0, r3
-	sub!	r2, r3, r3
-	jump.gt	@.BB1_3
-	jump	@.BB1_1
-.BB1_3:
-	add	@CPI1_1[0], r0, r3
-	uma.heap_read	r3, r0, r3
-	uma.calldata_read	r3, r0, r3
-	and	@CPI1_2[0], r3, r3
-	add	@CPI1_3[0], r0, r4
-	sub!	r3, r4, r4
-	add	@CPI1_4[0], r2, r3
-	add	42, r0, r2
-	add	@CPI1_6[0], r0, r4
-	sub!	r3, r4, r3
-	jump.le	@.BB1_2
-	jump	@.BB1_1
-.BB1_5:
-	add	@CPI1_4[0], r0, r4
-	add	@CPI1_5[0], r0, r5
-	sub!	r3, r5, r3
-	add	r2, r4, r3
-	add	99, r0, r2
-	add	@CPI1_6[0], r0, r4
-	sub!	r3, r4, r3
-.BB1_2:
-	uma.heap_write	r1, r2, r0
-	add	@CPI1_1[0], r0, r2
-	uma.heap_write	r2, r1, r0
-	add	32, r0, r1
-	add	@CPI1_0[0], r0, r2
-	uma.heap_write	r2, r1, r0
-	ret
-.BB1_1:
-	add	0, r0, r1
-	add	@CPI1_1[0], r0, r2
-	uma.heap_write	r2, r1, r0
-	add	@CPI1_0[0], r0, r2
-	uma.heap_write	r2, r1, r0
-	ret.panic r0
-.func_end1:
-
-	.note.GNU-stack
+    main:
+        context.this r2
+        far_call r2, r0, @panic
+    ret_ok:
+        ret.ok r1
+    panic:
+        ret.panic r0
     "#;
 
-    // #[test]
-    // fn run_something() {
-    //     use super::*;
+    #[test]
+    fn run_something() {
+        use super::*;
 
-    //     let mut input = vec![0u8; 64];
-    //     input[31] = 1;
-    //     input[63] = 2;
+        // set_tracing_mode(VmTracingOptions::ManualVerbose);
 
-    //     let trace = run_text_assembly_full_trace(SIMPLE_ASSEMBLY.to_owned(), input, 12);
+        let mut input = vec![0u8; 64];
+        input[31] = 1;
+        input[63] = 2;
 
-    //     let _ = std::fs::remove_file("tmp.json");
-    //     let mut file = std::fs::File::create("tmp.json").unwrap();
-    //     let json = serde_json::to_string(&trace).unwrap();
+        let trace = run_text_assembly_full_trace(SIMPLE_ASSEMBLY.to_owned(), input, 1000);
 
-    //     use std::io::Write;
-    //     file.write_all(json.as_bytes()).unwrap();
-    // }
+        let _ = std::fs::remove_file("tmp.json");
+        let mut file = std::fs::File::create("tmp.json").unwrap();
+        let json = serde_json::to_string(&trace).unwrap();
+
+        use std::io::Write;
+        file.write_all(json.as_bytes()).unwrap();
+    }
 
     #[test]
     fn test_manually() {
