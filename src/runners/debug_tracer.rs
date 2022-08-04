@@ -164,22 +164,44 @@ impl<const N: usize, E: VmEncodingMode<N>> Tracer<N, E> for DebugTracerWithAssem
                         let src0 = data.src0_value;
 
                         let abi = RetABI::from_u256(src0);
-                        let page = if abi.transit_page {
-                            state.vm_local_state.callstack.returndata_page
-                        } else {
-                            CallStackEntry::<N, E>::heap_page_from_base(
-                                state
-                                    .vm_local_state
-                                    .callstack
-                                    .get_current_stack()
-                                    .base_memory_page,
-                            )
+                        let returndata_page = match abi.page_forwarding_mode {
+                            RetForwardPageType::ForwardReturndata => {
+                                state.vm_local_state.callstack.returndata_page
+                            },
+                            RetForwardPageType::UseHeap => {
+                                CallStackEntry::<N, E>::heap_page_from_base(
+                                    state
+                                        .vm_local_state
+                                        .callstack
+                                        .get_current_stack()
+                                        .base_memory_page,
+                                )
+                            },
+                            RetForwardPageType::UseScratchSpace => {
+                                if zk_evm::vm_state::SUPPORTED_ISA_VERION < zk_evm::zkevm_opcode_defs::ISAVersion(1) {
+                                    CallStackEntry::<N, E>::heap_page_from_base(
+                                        state
+                                            .vm_local_state
+                                            .callstack
+                                            .get_current_stack()
+                                            .base_memory_page,
+                                    )
+                                } else {
+                                    CallStackEntry::<N, E>::scratch_page_from_base(
+                                        state
+                                            .vm_local_state
+                                            .callstack
+                                            .get_current_stack()
+                                            .base_memory_page,
+                                    )
+                                }
+                            },
                         };
 
                         let returndata =
                             crate::runners::compiler_tests::dump_memory_page_by_offset_and_length(
                                 memory,
-                                page.0,
+                                returndata_page.0,
                                 abi.returndata_offset.into_raw() as usize,
                                 abi.returndata_length.into_raw() as usize,
                             );
@@ -201,26 +223,48 @@ impl<const N: usize, E: VmEncodingMode<N>> Tracer<N, E> for DebugTracerWithAssem
                 let src1 = data.src1_value;
 
                 let abi = FarCallABI::from_u256(src1);
-                let page = if abi.transit_page {
-                    state
-                        .vm_local_state
-                        .callstack
-                        .get_current_stack()
-                        .calldata_page
-                } else {
-                    CallStackEntry::<N, E>::heap_page_from_base(
+                let calldata_page = match abi.page_forwarding_mode {
+                    FarCallForwardPageType::ForwardCalldata => {
                         state
                             .vm_local_state
                             .callstack
                             .get_current_stack()
-                            .base_memory_page,
-                    )
+                            .calldata_page
+                    },
+                    FarCallForwardPageType::UseHeap => {
+                        CallStackEntry::<N, E>::heap_page_from_base(
+                            state
+                                .vm_local_state
+                                .callstack
+                                .get_current_stack()
+                                .base_memory_page,
+                        )
+                    },
+                    FarCallForwardPageType::UseScratchSpace => {
+                        if zk_evm::vm_state::SUPPORTED_ISA_VERION < zk_evm::zkevm_opcode_defs::ISAVersion(1) {
+                            CallStackEntry::<N, E>::heap_page_from_base(
+                                state
+                                    .vm_local_state
+                                    .callstack
+                                    .get_current_stack()
+                                    .base_memory_page,
+                            )
+                        } else {
+                            CallStackEntry::<N, E>::scratch_page_from_base(
+                                state
+                                    .vm_local_state
+                                    .callstack
+                                    .get_current_stack()
+                                    .base_memory_page,
+                            )
+                        }
+                    },
                 };
 
                 let calldata =
                     crate::runners::compiler_tests::dump_memory_page_by_offset_and_length(
                         memory,
-                        page.0,
+                        calldata_page.0,
                         abi.calldata_offset.into_raw() as usize,
                         abi.calldata_length.into_raw() as usize,
                     );

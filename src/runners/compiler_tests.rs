@@ -289,7 +289,6 @@ pub struct VmSnapshot {
     pub tx_number_in_block: u16,
     pub previous_super_pc: u32,
     pub did_call_or_ret_recently: bool,
-    pub tx_origin: Address,
     pub calldata_area_dump: MemoryArea,
     pub returndata_area_dump: MemoryArea,
     pub execution_has_ended: bool,
@@ -690,7 +689,7 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     };
 
     let mut tools = create_default_testing_tools();
-    let mut block_properties = create_default_block_properties();
+    let block_properties = create_default_block_properties();
 
     let calldata_length = calldata.len();
     use zk_evm::contract_bytecode_to_words;
@@ -723,10 +722,6 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
 
         ctx
     });
-
-    // use block-global data from context
-    block_properties.block_number = context.block_number;
-    block_properties.block_timestamp = context.block_timestamp;
 
     // fill the rest
     let (mut vm, reverse_lookup_for_assembly) = create_vm::<false, N, E>(
@@ -1001,7 +996,6 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
         tx_number_in_block: local_state.tx_number_in_block,
         previous_super_pc: local_state.previous_super_pc.as_u64() as u32,
         did_call_or_ret_recently: local_state.did_call_or_ret_recently,
-        tx_origin: local_state.tx_origin,
         calldata_area_dump: calldata_mem,
         returndata_area_dump: returndata_mem,
         execution_has_ended,
