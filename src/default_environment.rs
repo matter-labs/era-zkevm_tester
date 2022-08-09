@@ -73,7 +73,6 @@ pub fn create_vm_with_default_settings<'a, const B: bool>(
         code_address: address_from_str_radix(DEFAULT_CALLER, 10),
         base_memory_page: MemoryPage(INITIAL_BASE_PAGE),
         code_page: MemoryPage(ENTRY_POINT_PAGE),
-        calldata_page: MemoryPage(CALLDATA_PAGE),
         sp: 0u16,
         pc: 0u16,
         exception_handler_location: 0u16,

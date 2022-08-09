@@ -8,7 +8,7 @@ use crate::utils::IntoFixedLengthByteIterator;
 use crate::{Address, H256, U256};
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::ops::Add;
+use std::ops::{Add, RangeInclusive};
 use std::sync::atomic::AtomicU64;
 use zk_evm::block_properties::*;
 use zk_evm::opcodes::execution::ret::*;
@@ -21,6 +21,7 @@ use zk_evm::testing::event_sink::{EventMessage, InMemoryEventSink};
 use zk_evm::testing::memory::SimpleMemory;
 use zk_evm::testing::storage::InMemoryStorage;
 use zk_evm::vm_state::*;
+use zk_evm::zkevm_opcode_defs::FatPointer;
 use zk_evm::zkevm_opcode_defs::decoding::AllowedPcOrImm;
 use zk_evm::zkevm_opcode_defs::decoding::{
     EncodingModeProduction, EncodingModeTesting, VmEncodingMode,
@@ -179,6 +180,41 @@ pub(crate) fn dump_memory_page_using_abi(
     dump_memory_page_by_offset_and_length(memory, page, offset as usize, length as usize)
 }
 
+pub(crate) fn dump_memory_page_using_primitive_value(
+    memory: &SimpleHashmapMemory,
+    ptr: PrimitiveValue,
+) -> Vec<u8> {
+    if ptr.is_pointer == false {
+        return vec![];
+    }
+    let fat_ptr = FatPointer::from_u256(ptr.value);
+    dump_memory_page_using_fat_pointer(memory, fat_ptr)
+}
+
+pub(crate) fn dump_memory_page_using_fat_pointer(
+    memory: &SimpleHashmapMemory,
+    fat_ptr: FatPointer,
+) -> Vec<u8> {
+    dump_memory_page_by_offset_and_length(memory, fat_ptr.memory_page, fat_ptr.offset as usize, (fat_ptr.end_non_inclusive - fat_ptr.offset) as usize)
+}
+
+pub(crate) fn fat_ptr_into_page_and_aligned_words_range(
+    ptr: PrimitiveValue,
+) -> (u32, std::ops::Range<u32>) {
+    if ptr.is_pointer == false {
+        return (0, 0..0)
+    }
+    let fat_ptr = FatPointer::from_u256(ptr.value);
+    let beginning_word = fat_ptr.offset / 32;
+    let end = fat_ptr.end_non_inclusive;
+    let mut end_word = end / 32;
+    if end % 32 != 0 {
+        end_word += 1;
+    }
+
+    (fat_ptr.memory_page, beginning_word..end_word)
+}
+
 pub(crate) fn dump_memory_page_by_offset_and_length(
     memory: &SimpleHashmapMemory,
     page: u32,
@@ -282,7 +318,7 @@ impl std::fmt::Debug for StorageKey {
 
 #[derive(Debug)]
 pub struct VmSnapshot {
-    pub registers: [U256; zk_evm::zkevm_opcode_defs::REGISTERS_COUNT],
+    pub registers: [PrimitiveValue; zk_evm::zkevm_opcode_defs::REGISTERS_COUNT],
     pub flags: zk_evm::flags::Flags,
     pub timestamp: u32,
     pub memory_page_counter: u32,
@@ -492,7 +528,8 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
     );
 
     for (i, value) in registers.into_iter().enumerate() {
-        vm.perform_dst1_update(value, (i + 1) as u8);
+        let as_primitive = PrimitiveValue::from_value(value);
+        vm.perform_dst1_update(as_primitive, (i + 1) as u8);
     }
 
     let initial_context = CallStackEntry {
@@ -501,7 +538,6 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
         code_address: context.this_address,
         base_memory_page: MemoryPage(INITIAL_BASE_PAGE),
         code_page: MemoryPage(ENTRY_POINT_PAGE),
-        calldata_page: MemoryPage(CALLDATA_PAGE),
         sp: E::PcOrImm::from_u64_clipped(0),
         pc: initial_pc,
         exception_handler_location: E::PcOrImm::max(),
@@ -539,15 +575,6 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool, const N: usize, E: VmEncoding
     let execution_has_ended = vm.execution_has_ended();
 
     let r1 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_PARAMS_REGISTER as usize];
-    let r2 = vm.local_state.registers[RET_RESERVED_REGISTER_TEMPORARY as usize];
-
-    // let r1 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_OFFSET_REGISTER as usize];
-    // let r2 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_LENGTH_REGISTER as usize];
-    // let r3 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_LENGTH_REGISTER as usize];
-
-    // let returndata_offset = r1.0[0] as usize;
-    // let returndata_length = r2.0[0] as usize;
-    let returndata_page = vm.local_state.callstack.returndata_page;
     let current_address = vm.local_state.callstack.get_current_stack().this_address;
 
     let outer_eh_location = E::PcOrImm::max().as_u64();
@@ -556,7 +583,7 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool, const N: usize, E: VmEncoding
         vm.local_state.callstack.get_current_stack().pc.as_u64(),
     ) {
         (true, 0) => {
-            let returndata = dump_memory_page_using_abi(&vm.memory, returndata_page.0, r1, r2);
+            let returndata = dump_memory_page_using_primitive_value(&vm.memory, r1);
 
             Some(VmExecutionResult::Ok(returndata))
         }
@@ -566,7 +593,7 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool, const N: usize, E: VmEncoding
             if vm.local_state.flags.overflow_or_less_than_flag {
                 Some(VmExecutionResult::Panic)
             } else {
-                let returndata = dump_memory_page_using_abi(&vm.memory, returndata_page.0, r1, r2);
+                let returndata = dump_memory_page_using_primitive_value(&vm.memory, r1);
                 Some(VmExecutionResult::Revert(returndata))
             }
         }
@@ -738,34 +765,17 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
 
     if set_far_call_props {
         // we need to properly set calldata abi
-        let r1 = U256::zero();
+        vm.local_state.registers[0] = crate::utils::form_initial_calldata_ptr(CALLDATA_PAGE, calldata_length as u32);
 
-        let mut r2 = U256::zero();
-        r2.0[0] = calldata_length as u64;
-
-        vm.local_state.registers[0] = r1;
-        vm.local_state.registers[1] = r2;
         if vm_launch_option == VmLaunchOption::Constructor {
-            vm.local_state.registers[2] = U256::from_dec_str("1").unwrap();
+            vm.local_state.registers[1] = PrimitiveValue::from_value(U256::from_dec_str("1").unwrap());
         } else {
-            vm.local_state.registers[2] = U256::zero();
+            vm.local_state.registers[1] = PrimitiveValue::empty();
         }
 
-        let r4 = U256::zero();
-        vm.local_state.registers[3] = r4;
+        vm.local_state.registers[2] = PrimitiveValue::empty();
+        vm.local_state.registers[3] = PrimitiveValue::empty();
     }
-
-    // if set_far_call_props {
-    //     // we need to properly set calldata abi
-    //     let mut r1 = U256::zero();
-    //     r1.0[1] = calldata_length as u64;
-    //     if vm_launch_option == VmLaunchOption::Constructor {
-    //         r1.0[3] = 1u64;
-    //     } else {
-    //     }
-    //     vm.local_state.registers[0] = r1;
-    //     vm.local_state.registers[1] = U256::zero();
-    // }
 
     let mut result = None;
 
@@ -802,13 +812,9 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
                 last_step.memory_interactions.truncate(0);
                 for query in vm.witness_tracer.queries.drain(..) {
                     let memory_type = match query.location.memory_type {
-                        zk_evm::abstractions::MemoryType::Calldata => {
-                            crate::trace::MemoryType::calldata
-                        }
-                        zk_evm::abstractions::MemoryType::Returndata => {
-                            crate::trace::MemoryType::returndata
-                        }
                         zk_evm::abstractions::MemoryType::Heap => crate::trace::MemoryType::heap,
+                        zk_evm::abstractions::MemoryType::AuxHeap => crate::trace::MemoryType::aux_heap,
+                        zk_evm::abstractions::MemoryType::FatPointer => crate::trace::MemoryType::fat_ptr,
                         zk_evm::abstractions::MemoryType::Code => crate::trace::MemoryType::code,
                         zk_evm::abstractions::MemoryType::Stack => crate::trace::MemoryType::stack,
                     };
@@ -895,7 +901,7 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
         }
     }
 
-    let returndata_page = vm.local_state.callstack.returndata_page;
+    let return_abi_register = vm.local_state.registers[0]; // r1
 
     let execution_result = if let Some(result) = result {
         result
@@ -957,7 +963,12 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
 
     // memory dump for returndata
     let returndata_page_content = if get_tracing_mode() != VmTracingOptions::None {
-        memory.dump_full_page_as_u256_words(returndata_page.0)
+        if return_abi_register.is_pointer {
+            let return_abi_ptr = FatPointer::from_u256(return_abi_register.value);
+            memory.dump_full_page_as_u256_words(return_abi_ptr.memory_page)
+        } else {
+            vec![]
+        }
     } else {
         vec![]
     };

@@ -5,7 +5,7 @@ use std::ops::Add;
 
 use serde::{Deserialize, Serialize};
 use zk_evm::zkevm_opcode_defs::decoding::{AllowedPcOrImm, EncodingModeProduction, VmEncodingMode};
-use zk_evm::zkevm_opcode_defs::{Opcode, ReturndataABI, REGISTERS_COUNT};
+use zk_evm::zkevm_opcode_defs::{Opcode, ReturndataABI, REGISTERS_COUNT, FatPointer};
 
 use crate::runners::compiler_tests::{dump_memory_page_using_abi, VmTracingOptions};
 
@@ -27,8 +27,6 @@ pub struct VmExecutionStep {
     pub code_page_index: u32,
     pub heap_page_index: u32,
     pub stack_page_index: u32,
-    pub calldata_page_index: u32,
-    pub returndata_page_index: u32,
     pub register_interactions: HashMap<usize, MemoryAccessType>,
     pub memory_interactions: Vec<MemoryInteraction>,
     pub memory_snapshots: Vec<MemorySnapshot>,
@@ -47,10 +45,12 @@ pub struct MemorySnapshot {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum MemoryType {
     heap,
+    aux_heap,
     stack,
+    fat_ptr,
+    code,
     calldata,
     returndata,
-    code,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -135,12 +135,10 @@ pub fn run_text_assembly_full_trace(
     use zk_evm::contract_bytecode_to_words;
 
     // set registers r1-r4 for external call convension
-    vm.local_state.registers[0] = U256::zero();
-    let mut r2 = U256::zero();
-    r2.0[0] = calldata.len() as u64;
-    vm.local_state.registers[1] = r2;
-    vm.local_state.registers[2] = U256::zero();
-    vm.local_state.registers[3] = U256::zero();
+    vm.local_state.registers[0] = crate::utils::form_initial_calldata_ptr(CALLDATA_PAGE, calldata.len() as u32);
+    vm.local_state.registers[1] = PrimitiveValue::empty();
+    vm.local_state.registers[2] = PrimitiveValue::empty();
+    vm.local_state.registers[3] = PrimitiveValue::empty();
 
     let mut tracer = VmDebugTracer::new_from_entry_point(
         default_callee_address(),
@@ -205,7 +203,7 @@ fn flags_into_description(flags: &Flags) -> Vec<String> {
 
 pub struct VmDebugTracer<const N: usize = 8, E: VmEncodingMode<N> = EncodingModeProduction> {
     pub debug_info: HashMap<Address, ContractSourceDebugInfo>,
-    regs_before: Option<[U256; REGISTERS_COUNT]>,
+    regs_before: Option<[PrimitiveValue; REGISTERS_COUNT]>,
     aux_info: Option<AfterDecodingData<N, E>>,
     callstack_info: Option<CallStackEntry<N, E>>,
     cycle_number: u32,
@@ -297,8 +295,6 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::abstractions::Tracer<N, E>
         let contract_address = format!("0x{:x}", current_context.this_address);
         let code_page = current_context.code_page.0;
         let base_memory_page = current_context.base_memory_page.0;
-        let calldata_page = current_context.calldata_page.0;
-        let returndata_page = state.vm_local_state.callstack.returndata_page.0;
         self.callstack_info = Some(current_context.clone());
         drop(current_context);
         if let Some(info) = self.debug_info.get_mut(&code_address) {
@@ -312,7 +308,7 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::abstractions::Tracer<N, E>
         let registers = state
             .vm_local_state
             .registers
-            .map(|el| format!("0x{:x}", el));
+            .map(|el| format!("0x{:x}", el.value));
         // .map(|el| format!("0x{:064x}", el));
 
         let error = if let Some(e) = errors.first() {
@@ -336,8 +332,6 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::abstractions::Tracer<N, E>
                 base_memory_page,
             ))
             .0,
-            calldata_page_index: calldata_page,
-            returndata_page_index: returndata_page,
             register_interactions: HashMap::new(),
             memory_interactions: vec![],
             memory_snapshots: vec![],
@@ -346,18 +340,10 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::abstractions::Tracer<N, E>
 
         // special case for initial cycle
         if self.did_call_recently {
-            let calldata_offset = state.vm_local_state.registers[0].0[0] as usize;
-            let calldata_length = state.vm_local_state.registers[1].0[0] as usize;
+            let (calldata_page, range) = crate::runners::compiler_tests::fat_ptr_into_page_and_aligned_words_range(state.vm_local_state.registers[0]);
 
-            let beginning_word = calldata_offset / 32;
-            let end = calldata_offset + calldata_length;
-            let mut end_word = end / 32;
-            if end % 32 != 0 {
-                end_word += 1;
-            }
-
-            let initial_calldata =
-                memory.dump_page_content(calldata_page, (beginning_word as u32)..(end_word as u32));
+            let initial_calldata = 
+                memory.dump_page_content(calldata_page, range);
             let len_words = initial_calldata.len();
 
             let initial_calldata = initial_calldata
@@ -376,20 +362,15 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::abstractions::Tracer<N, E>
         }
 
         if self.did_return_recently {
-            // get new context
-            let returndata_abi = ReturndataABI::from_u256(state.vm_local_state.registers[0]);
-            let returndata_offset = returndata_abi.returndata_offset.into_raw() as usize;
-            let returndata_len = returndata_abi.returndata_length.into_raw() as usize;
-
-            let beginning_word = returndata_offset / 32;
-            let end = returndata_offset + returndata_len;
-            let mut end_word = end / 32;
-            if end % 32 != 0 {
-                end_word += 1;
+            let (returndata_page, range) = crate::runners::compiler_tests::fat_ptr_into_page_and_aligned_words_range(state.vm_local_state.registers[0]);
+            
+            let mut fat_ptr = FatPointer::from_u256(state.vm_local_state.registers[0].value);
+            if state.vm_local_state.registers[0].is_pointer == false {
+                fat_ptr = FatPointer::empty();
             }
-
+            let returndata_len = fat_ptr.end_non_inclusive - fat_ptr.offset;
             let initial_returndata = memory
-                .dump_page_content(returndata_page, (beginning_word as u32)..(end_word as u32));
+                .dump_page_content(returndata_page, range);
             let initial_returndata = initial_returndata
                 .into_iter()
                 .map(|el| format!("0x{}", hex::encode(&el)))
@@ -555,7 +536,7 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::abstractions::Tracer<N, E>
         trace_step.registers = state
             .vm_local_state
             .registers
-            .map(|el| format!("0x{:x}", el));
+            .map(|el| format!("0x{:x}", el.value));
         // .map(|el| format!("0x{:064x}", el));
 
         if let Some(mem) = data.dst0_mem_location {
