@@ -63,7 +63,7 @@ pub(crate) fn form_initial_calldata_ptr(calldata_page: u32, calldata_length: u32
         offset: 0,
         memory_page: calldata_page,
         start: 0,
-        end_non_inclusive: calldata_length,
+        length: calldata_length,
     };
 
     PrimitiveValue { value: fat_pointer.to_u256(), is_pointer: true }

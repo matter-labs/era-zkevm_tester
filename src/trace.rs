@@ -5,7 +5,7 @@ use std::ops::Add;
 
 use serde::{Deserialize, Serialize};
 use zk_evm::zkevm_opcode_defs::decoding::{AllowedPcOrImm, EncodingModeProduction, VmEncodingMode};
-use zk_evm::zkevm_opcode_defs::{Opcode, ReturndataABI, REGISTERS_COUNT, FatPointer};
+use zk_evm::zkevm_opcode_defs::{Opcode, REGISTERS_COUNT, FatPointer};
 
 use crate::runners::compiler_tests::{dump_memory_page_using_abi, VmTracingOptions};
 
@@ -368,7 +368,7 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::abstractions::Tracer<N, E>
             if state.vm_local_state.registers[0].is_pointer == false {
                 fat_ptr = FatPointer::empty();
             }
-            let returndata_len = fat_ptr.end_non_inclusive - fat_ptr.offset;
+            let returndata_len = fat_ptr.length;
             let initial_returndata = memory
                 .dump_page_content(returndata_page, range);
             let initial_returndata = initial_returndata

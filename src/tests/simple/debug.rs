@@ -18,18 +18,13 @@ mod tests {
         add     @C0[0], r0, r2
         add     4, r0, r3
         uma.heap_write  r3, r2, r0
-        uma.heap_read r0, r0, r4
-        add 32, r0, r5
-        uma.heap_read r5, r0, r5
-        add 2, r0, r4
-        uma.heap_read r4, r0, r4
-        add 34, r0, r5
-        uma.heap_read r5, r0, r5
-        add     36, r0, r6
-.BB1_1:
-        uma.heap_write  r2, r1, r0
-        uma.heap_write  r2, r6, r0
-        revert
+		add r3, r0, r1
+		shl.s 32, r1, r1
+		add 32, r3, r2
+		add r2, r1, r1
+		shl.s 64, r1, r1
+		add r3, r1, r1
+		ret r1
                 "#;
 
         set_tracing_mode(VmTracingOptions::ManualVerbose);

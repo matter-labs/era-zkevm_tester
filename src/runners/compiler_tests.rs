@@ -195,7 +195,7 @@ pub(crate) fn dump_memory_page_using_fat_pointer(
     memory: &SimpleHashmapMemory,
     fat_ptr: FatPointer,
 ) -> Vec<u8> {
-    dump_memory_page_by_offset_and_length(memory, fat_ptr.memory_page, fat_ptr.offset as usize, (fat_ptr.end_non_inclusive - fat_ptr.offset) as usize)
+    dump_memory_page_by_offset_and_length(memory, fat_ptr.memory_page, fat_ptr.offset as usize, fat_ptr.length as usize)
 }
 
 pub(crate) fn fat_ptr_into_page_and_aligned_words_range(
@@ -206,7 +206,7 @@ pub(crate) fn fat_ptr_into_page_and_aligned_words_range(
     }
     let fat_ptr = FatPointer::from_u256(ptr.value);
     let beginning_word = fat_ptr.offset / 32;
-    let end = fat_ptr.end_non_inclusive;
+    let end = fat_ptr.start + fat_ptr.length;
     let mut end_word = end / 32;
     if end % 32 != 0 {
         end_word += 1;
