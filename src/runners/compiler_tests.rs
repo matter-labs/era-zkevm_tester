@@ -180,7 +180,7 @@ pub(crate) fn dump_memory_page_using_fat_pointer(
     memory: &SimpleHashmapMemory,
     fat_ptr: FatPointer,
 ) -> Vec<u8> {
-    dump_memory_page_by_offset_and_length(memory, fat_ptr.memory_page, (fat_ptr.start + fat_ptr.offset) as usize, (fat_ptr.start + fat_ptr.length - fat_ptr.offset) as usize)
+    dump_memory_page_by_offset_and_length(memory, fat_ptr.memory_page, (fat_ptr.start + fat_ptr.offset) as usize, (fat_ptr.length - fat_ptr.offset) as usize)
 }
 
 pub(crate) fn fat_ptr_into_page_and_aligned_words_range(
