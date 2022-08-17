@@ -368,7 +368,7 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::abstractions::Tracer<N, E>
             if state.vm_local_state.registers[0].is_pointer == false {
                 fat_ptr = FatPointer::empty();
             }
-            let returndata_len = fat_ptr.length;
+            let returndata_len = fat_ptr.start + fat_ptr.length - fat_ptr.offset;
             let initial_returndata = memory
                 .dump_page_content(returndata_page, range);
             let initial_returndata = initial_returndata
