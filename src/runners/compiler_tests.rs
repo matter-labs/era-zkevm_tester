@@ -165,21 +165,6 @@ pub fn calldata_to_aligned_data(calldata: &Vec<u8>) -> Vec<U256> {
     result
 }
 
-pub(crate) fn dump_memory_page_using_abi(
-    memory: &SimpleHashmapMemory,
-    page: u32,
-    r1: U256,
-    r2: U256,
-) -> Vec<u8> {
-    let offset = r1.0[0] as usize;
-    let length = r1.0[1] as usize;
-    // let length = r2.0[0] as usize;
-    assert!(offset < (1u32 << 24) as usize);
-    assert!(length < (1u32 << 24) as usize);
-
-    dump_memory_page_by_offset_and_length(memory, page, offset as usize, length as usize)
-}
-
 pub(crate) fn dump_memory_page_using_primitive_value(
     memory: &SimpleHashmapMemory,
     ptr: PrimitiveValue,

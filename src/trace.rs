@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use zk_evm::zkevm_opcode_defs::decoding::{AllowedPcOrImm, EncodingModeProduction, VmEncodingMode};
 use zk_evm::zkevm_opcode_defs::{Opcode, REGISTERS_COUNT, FatPointer};
 
-use crate::runners::compiler_tests::{dump_memory_page_using_abi, VmTracingOptions};
+use crate::runners::compiler_tests::{VmTracingOptions};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ContractSourceDebugInfo {
