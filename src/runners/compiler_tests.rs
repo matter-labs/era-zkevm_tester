@@ -533,6 +533,8 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
         is_static: false,
         is_local_frame: false,
         context_u128_value: 0,
+        heap_bound: 0,
+        aux_heap_bound: 0,
     };
 
     // we consider the tested code as a bootloader
