@@ -10,22 +10,85 @@ mod tests {
     #[test]
     fn test_manual() {
         let assembly: &'static str = r#"
+		.text
+        .file   "Test"
+        .text.unlikely.
+        .globl  __entry
+__entry:
+.func_begin0:
+        ptr.add r1, r0, stack[@ptr_calldata]
+        sub.s!  0, r2, r1
+        jump.eq @.BB0_2
+        add     32, r0, r1
+        add     256, r0, r2
+        st.1    r2, r1
+        add     288, r0, r1
+        st.1    r1, r0
+        add     @CPI0_0[0], r0, r1
+        ret.ok.to_label r1, @DEFAULT_FAR_RETURN
+.BB0_2:
+        near_call       r0, @__runtime, @DEFAULT_UNWIND
+.func_end0:
+
+__runtime:
+.func_begin1:
+        ptr.add stack[@ptr_calldata], r0, r2
+        ptr.add.s       36, r2, r1
+        ld      r1, r1
+        sub.s!  0, r1, r3
+        add     r0, r0, r3
+        jump.eq @.BB1_4
+        ptr.add.s       4, r2, r2
+        ld      r2, r2
+        add     @CPI1_0[0], r0, r3
+        sub.s!  @CPI1_0[0], r2, r4
+        jump.ne @.BB1_3
+        sub.s   1, r0, r4
+        sub!    r1, r4, r4
+        jump.eq @.BB1_4
+.BB1_3:
+        and     @CPI1_0[0], r1, r3
+        and     @CPI1_1[0], r1, r1
+        add     @CPI1_0[0], r0, r4
+        sub     r4, r1, r5
+        sub.s!  @CPI1_0[0], r3, r6
+        add.eq  r5, r0, r1
+        and     @CPI1_0[0], r2, r5
+        and     @CPI1_1[0], r2, r2
+        sub     r4, r2, r6
+        sub.s!  @CPI1_0[0], r5, r7
+        add.eq  r6, r0, r2
+        div     r2, r1, r1, r2
+        xor     r5, r3, r2
+        sub     r4, r1, r3
+        or      @CPI1_0[0], r3, r3
+        sub.s!  @CPI1_0[0], r2, r2
+        add.ne  r1, r0, r3
+.BB1_4:
+        add     256, r0, r1
+        st.1    r1, r3
+        add     @CPI1_2[0], r0, r1
+        ret.ok.to_label r1, @DEFAULT_FAR_RETURN
+.func_end1:
+
+        .data
+        .p2align        5
+ptr_calldata:
+.cell   0
+
+        .note.GNU-stack
         .rodata
-        C0:
-            .cell 7749745057451750595669064617574929170518332649783278685167248603617863602466
-        .text
-        .BB1_9:
-        add     @C0[0], r0, r2
-        add     4, r0, r3
-        uma.heap_write  r3, r2, r0
-		add r3, r0, r1
-		shl.s 32, r1, r1
-		add 32, r3, r2
-		add r2, r1, r1
-		shl.s 64, r1, r1
-		add r3, r1, r1
-		ret r1
+CPI0_0:
+        .cell 5070602405635284088856458035200
+CPI1_0:
+        .cell -57896044618658097711785492504343953926634992332820282019728792003956564819968
+CPI1_1:
+        .cell 57896044618658097711785492504343953926634992332820282019728792003956564819967
+CPI1_2:
+        .cell 2535301205178825285863051624448
                 "#;
+
+		
 
         set_tracing_mode(VmTracingOptions::ManualVerbose);
         run_inner(vec![], VmLaunchOption::Default, assembly);

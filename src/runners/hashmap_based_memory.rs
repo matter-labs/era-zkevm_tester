@@ -4,7 +4,7 @@ use zk_evm::abstractions::MEMORY_CELLS_OTHER_PAGES;
 
 #[derive(Debug)]
 pub struct SimpleHashmapMemory {
-    pub inner: HashMap<u32, HashMap<u32, U256>>,
+    pub inner: HashMap<u32, HashMap<u32, PrimitiveValue>>,
 }
 
 // as usual, if we rollback the current frame then we apply changes to storage immediately,
@@ -25,6 +25,7 @@ impl SimpleHashmapMemory {
             assert!(len <= MEMORY_CELLS_OTHER_PAGES);
             let mut inner_map = HashMap::with_capacity(len);
             for (index, value) in values.into_iter().enumerate() {
+                let value = PrimitiveValue::from_value(value);
                 inner_map.insert(index as u32, value);
             }
             self.inner.insert(page, inner_map);
@@ -59,7 +60,7 @@ impl SimpleHashmapMemory {
             let mut result = Vec::with_capacity(range.len() as usize);
             for i in range {
                 if let Some(word) = page.get(&i) {
-                    result.push(*word);
+                    result.push(word.value);
                 } else {
                     result.push(U256::zero());
                 }
@@ -76,7 +77,7 @@ impl SimpleHashmapMemory {
             let max_key = *page.keys().max().unwrap_or(&0);
             let mut result = Vec::with_capacity(max_key as usize);
             for key in 0..max_key {
-                let word = page.get(&key).copied().unwrap_or(U256::zero());
+                let word = page.get(&key).map(|el| el.value).unwrap_or(U256::zero());
                 result.push(word);
             }
 
@@ -101,6 +102,7 @@ impl SimpleHashmapMemory {
 
 use zk_evm::abstractions::Memory;
 use zk_evm::aux_structures::MemoryQuery;
+use zk_evm::vm_state::PrimitiveValue;
 
 impl Memory for SimpleHashmapMemory {
     fn execute_partial_query(
@@ -112,11 +114,13 @@ impl Memory for SimpleHashmapMemory {
             .inner
             .entry(query.location.page.0)
             .or_insert(HashMap::new());
-        let value = entry.entry(query.location.index.0).or_insert(U256::zero());
+        let value = entry.entry(query.location.index.0).or_insert(PrimitiveValue::empty());
         if query.rw_flag {
-            *value = query.value;
+            value.value = query.value;
+            value.is_pointer = query.value_is_pointer;
         } else {
-            query.value = *value;
+            query.value = value.value;
+            query.value_is_pointer = value.is_pointer;
         }
 
         query

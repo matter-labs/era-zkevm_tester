@@ -457,7 +457,7 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::abstractions::Tracer<N, E>
                         .get(&page)
                         .unwrap_or(&HashMap::new())
                         .get(&index)
-                        .copied()
+                        .map(|el| el.value)
                         .unwrap_or(U256::zero());
 
                     let value = format!("0x{:064x}", value);
@@ -594,7 +594,7 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::abstractions::Tracer<N, E>
                         .get(&page)
                         .unwrap_or(&HashMap::new())
                         .get(&index)
-                        .copied()
+                        .map(|el| el.value)
                         .unwrap_or(U256::zero());
 
                     let value = format!("0x{:064x}", value);
