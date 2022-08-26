@@ -8,7 +8,6 @@ use crate::utils::IntoFixedLengthByteIterator;
 use crate::{Address, H256, U256};
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::ops::{Add, RangeInclusive};
 use std::sync::atomic::AtomicU64;
 use zk_evm::block_properties::*;
 use zk_evm::opcodes::execution::ret::*;
@@ -16,9 +15,8 @@ use zk_evm::precompiles::DEPLOYER_SYSTEM_CONTRACT_ADDRESS;
 use zk_evm::precompiles::{
     DefaultPrecompilesProcessor, KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
 };
-use zk_evm::testing::decommitter::SimpleDecommitter;
-use zk_evm::testing::event_sink::{EventMessage, InMemoryEventSink};
-use zk_evm::testing::memory::SimpleMemory;
+use zk_evm::reference_impls::decommitter::SimpleDecommitter;
+use zk_evm::reference_impls::event_sink::{EventMessage, InMemoryEventSink};
 use zk_evm::testing::storage::InMemoryStorage;
 use zk_evm::vm_state::*;
 use zk_evm::zkevm_opcode_defs::FatPointer;

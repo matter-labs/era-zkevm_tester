@@ -1,4 +1,4 @@
-use zk_evm::{ethereum_types::Address, testing::event_sink::EventMessage};
+use zk_evm::{ethereum_types::Address, reference_impls::event_sink::EventMessage};
 
 #[derive(Clone)]
 pub struct SolidityLikeEvent {

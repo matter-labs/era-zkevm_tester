@@ -125,4 +125,12 @@ impl Memory for SimpleHashmapMemory {
 
         query
     }
+
+    fn spacialized_code_query(
+            &mut self,
+            monotonic_cycle_counter: u32,
+            query: MemoryQuery,
+        ) -> MemoryQuery {
+        self.execute_partial_query(monotonic_cycle_counter, query)
+    }
 }
