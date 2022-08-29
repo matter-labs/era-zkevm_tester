@@ -692,6 +692,7 @@ pub(crate) fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_tex
         vec![assembly.clone()],
         vec![],
         HashMap::new(),
+        U256::zero(),
     ));
 
     let VmSnapshot {
@@ -755,6 +756,7 @@ pub(crate) fn run_inner_with_context(
         vec![assembly.clone()],
         vec![],
         HashMap::new(),
+        U256::zero(),
     ));
 
     let VmSnapshot {
