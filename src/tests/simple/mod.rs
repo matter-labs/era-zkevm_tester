@@ -9,6 +9,7 @@ mod uma;
 use crate::runners::compiler_tests::VmLaunchOption;
 use crate::runners::compiler_tests::VmTracingOptions;
 use std::collections::HashMap;
+use zk_evm::ethereum_types::U256;
 use zkevm_assembly::Assembly;
 
 pub(crate) fn run_for_result_only(assembly_text: &str) {
@@ -29,6 +30,7 @@ pub(crate) fn run_for_result_only(assembly_text: &str) {
         vec![assembly.clone()],
         vec![],
         HashMap::new(),
+        U256::zero(),
     ));
 
     assert!(snapshot.execution_has_ended);
