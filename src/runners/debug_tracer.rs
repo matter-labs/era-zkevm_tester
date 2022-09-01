@@ -205,10 +205,10 @@ impl<const N: usize, E: VmEncodingMode<N>> Tracer<N, E> for DebugTracerWithAssem
             Opcode::FarCall(_) => {
                 // catch calldata
                 let src0 = data.src0_value;
-                let dest = u256_to_address_unchecked(&src0.value);
                 let src1 = data.src1_value;
+                let dest = u256_to_address_unchecked(&src1.value);
 
-                let mut abi = FarCallABI::from_u256(src1.value);
+                let mut abi = FarCallABI::from_u256(src0.value);
                 match abi.forwarding_mode {
                     FarCallForwardPageType::ForwardFatPointer => {},
                     FarCallForwardPageType::UseHeap => {
