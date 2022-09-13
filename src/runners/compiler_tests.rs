@@ -30,12 +30,21 @@ use zkevm_assembly::Assembly;
 use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Hash)]
+pub struct FullABIParams {
+    is_constructor: bool,
+    is_system_call: bool,
+    r3_value: Option<U256>,
+    r4_value: Option<U256>,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Hash)]
 pub enum VmLaunchOption {
     Default,
     Pc(u32),
     Label(String),
     Call,
     Constructor,
+    ManualCallABI(FullABIParams)
 }
 
 #[derive(Debug)]
@@ -689,8 +698,8 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     }
     let all_contracts_mapping = contracts.clone();
 
-    let (initial_pc, set_far_call_props) = match &vm_launch_option {
-        VmLaunchOption::Pc(pc) => (E::PcOrImm::from_u64_clipped(*pc as u64), false),
+    let (initial_pc, set_far_call_props, extra_props) = match &vm_launch_option {
+        VmLaunchOption::Pc(pc) => (E::PcOrImm::from_u64_clipped(*pc as u64), false, None),
         VmLaunchOption::Label(label) => {
             let offset = *contracts
                 .get(&entry_address)
@@ -699,11 +708,36 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
                 .get(label)
                 .unwrap();
 
-            (E::PcOrImm::from_u64_clipped(offset as u64), false)
+            (E::PcOrImm::from_u64_clipped(offset as u64), false, None)
+        },
+        VmLaunchOption::Default | VmLaunchOption::Call => {
+            (
+                E::PcOrImm::from_u64_clipped(0u64), 
+                true, 
+                None,
+            )
+        },
+
+        VmLaunchOption::Constructor => {
+            (
+                E::PcOrImm::from_u64_clipped(0u64), 
+                true, 
+                Some(FullABIParams{
+                    is_constructor: true,
+                    is_system_call: false,
+                    r3_value: None,
+                    r4_value: None,
+                }),
+            )
+        },
+        VmLaunchOption::ManualCallABI(value) => {
+            (
+                E::PcOrImm::from_u64_clipped(0u64), 
+                true, 
+                Some(value.clone()),
+            )
         }
-        VmLaunchOption::Default | VmLaunchOption::Call | VmLaunchOption::Constructor => {
-            (E::PcOrImm::from_u64_clipped(0u64), true)
-        }
+
     };
 
     let mut tools = create_default_testing_tools();
@@ -759,14 +793,26 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
         // we need to properly set calldata abi
         vm.local_state.registers[0] = crate::utils::form_initial_calldata_ptr(CALLDATA_PAGE, calldata_length as u32);
 
-        if vm_launch_option == VmLaunchOption::Constructor {
-            vm.local_state.registers[1] = PrimitiveValue::from_value(U256::from_dec_str("1").unwrap());
-        } else {
-            vm.local_state.registers[1] = PrimitiveValue::empty();
-        }
-
+        vm.local_state.registers[1] = PrimitiveValue::empty();
         vm.local_state.registers[2] = PrimitiveValue::empty();
         vm.local_state.registers[3] = PrimitiveValue::empty();
+
+        if let Some(extra_props) = extra_props {
+            let mut r2_value = U256::zero();
+            if extra_props.is_constructor {
+                r2_value += U256::from(1u64 << 0);
+            }
+            if extra_props.is_system_call {
+                r2_value += U256::from(1u64 << 1);
+            }
+
+            let r3_value = extra_props.r3_value.unwrap_or(U256::zero());
+            let r4_value = extra_props.r4_value.unwrap_or(U256::zero());
+
+            vm.local_state.registers[1] = PrimitiveValue::from_value(r2_value);
+            vm.local_state.registers[2] = PrimitiveValue::from_value(r3_value);
+            vm.local_state.registers[3] = PrimitiveValue::from_value(r4_value);
+        }
     }
 
     let mut result = None;
