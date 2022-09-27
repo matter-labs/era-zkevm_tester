@@ -31,10 +31,10 @@ use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Hash)]
 pub struct FullABIParams {
-    is_constructor: bool,
-    is_system_call: bool,
-    r3_value: Option<U256>,
-    r4_value: Option<U256>,
+    pub is_constructor: bool,
+    pub is_system_call: bool,
+    pub r3_value: Option<U256>,
+    pub r4_value: Option<U256>,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Hash)]
