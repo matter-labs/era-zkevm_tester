@@ -126,7 +126,7 @@ impl Memory for SimpleHashmapMemory {
         query
     }
 
-    fn spacialized_code_query(
+    fn specialized_code_query(
             &mut self,
             monotonic_cycle_counter: u32,
             query: MemoryQuery,
