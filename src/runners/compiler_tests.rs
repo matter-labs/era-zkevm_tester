@@ -362,7 +362,7 @@ pub async fn run_vm(
     known_bytecodes: Vec<Vec<[u8; 32]>>,
     factory_deps: HashMap<H256, Vec<[u8; 32]>>,
     default_aa_code_hash: U256,
-) -> VmSnapshot {
+) -> anyhow::Result<VmSnapshot> {
     let entry_address = default_entry_point_contract_address();
     let mut contracts: HashMap<Address, Assembly> = HashMap::new();
     contracts.insert(entry_address, assembly);
