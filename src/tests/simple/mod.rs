@@ -31,7 +31,7 @@ pub(crate) fn run_for_result_only(assembly_text: &str) {
         vec![],
         HashMap::new(),
         U256::zero(),
-    ));
+    )).unwrap();
 
     assert!(snapshot.execution_has_ended);
     assert!(
