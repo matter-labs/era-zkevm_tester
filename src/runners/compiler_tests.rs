@@ -619,7 +619,7 @@ pub async fn run_vm_multi_contracts(
     known_bytecodes: Vec<Vec<[u8; 32]>>,
     factory_deps: HashMap<H256, Vec<[u8; 32]>>,
     default_aa_code_hash: U256,
-) -> VmSnapshot {
+) -> anyhow::Result<VmSnapshot> {
     use zkevm_assembly::{get_encoding_mode, RunningVmEncodingMode};
     let encoding_mode = get_encoding_mode();
     match encoding_mode {
