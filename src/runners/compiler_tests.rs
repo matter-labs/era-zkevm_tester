@@ -683,7 +683,7 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     known_bytecodes: Vec<Vec<[u8; 32]>>,
     factory_deps: HashMap<H256, Vec<[u8; 32]>>,
     default_aa_code_hash: U256,
-) -> VmSnapshot {
+) -> anyhow::Result<VmSnapshot> {
     let mut contracts = contracts;
     for (a, c) in contracts.iter_mut() {
         match c.compile_to_bytecode_for_mode::<N, E>() {
