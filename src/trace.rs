@@ -757,7 +757,7 @@ pub(crate) fn run_inner_with_context(
         vec![],
         HashMap::new(),
         U256::zero(),
-    ));
+    )).unwrap();
 
     let VmSnapshot {
         registers,
