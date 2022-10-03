@@ -750,7 +750,7 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     // fill the calldata
     let aligned_calldata = calldata_to_aligned_data(&calldata);
     // and initial memory page
-    let initial_assembly = contracts.get(&entry_address).cloned().unwrap();
+    let initial_assembly = contracts.get(&entry_address).cloned().ok_or_else(|| anyhow::anyhow!("Initial assembly not found"))?;
     let initial_bytecode = initial_assembly
         .clone()
         .compile_to_bytecode_for_mode::<N, E>()
@@ -1037,7 +1037,7 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
 
     let serialized_events = serde_json::to_string_pretty(&compiler_tests_events).unwrap();
 
-    VmSnapshot {
+    Ok(VmSnapshot {
         registers: local_state.registers,
         flags: local_state.flags,
         timestamp: local_state.timestamp,
@@ -1059,7 +1059,7 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
         events,
         serialized_events,
         num_cycles_used: cycles_used,
-    }
+    })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
