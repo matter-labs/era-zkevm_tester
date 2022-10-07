@@ -40,7 +40,6 @@ pub fn address_from_str_radix(str: &str, radix: u32) -> Address {
 pub fn create_default_block_properties() -> BlockProperties {
     BlockProperties {
         default_aa_code_hash: U256::zero(),
-        ergs_per_code_decommittment_word: 1,
         zkporter_is_available: true,
     }
 }
