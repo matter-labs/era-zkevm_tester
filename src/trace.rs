@@ -693,7 +693,7 @@ pub(crate) fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_tex
         vec![],
         HashMap::new(),
         U256::zero(),
-    ));
+    )).unwrap();
 
     let VmSnapshot {
         registers,
@@ -757,7 +757,7 @@ pub(crate) fn run_inner_with_context(
         vec![],
         HashMap::new(),
         U256::zero(),
-    ));
+    )).unwrap();
 
     let VmSnapshot {
         registers,

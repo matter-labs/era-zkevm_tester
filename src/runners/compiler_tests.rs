@@ -362,7 +362,7 @@ pub async fn run_vm(
     known_bytecodes: Vec<Vec<[u8; 32]>>,
     factory_deps: HashMap<H256, Vec<[u8; 32]>>,
     default_aa_code_hash: U256,
-) -> VmSnapshot {
+) -> anyhow::Result<VmSnapshot> {
     let entry_address = default_entry_point_contract_address();
     let mut contracts: HashMap<Address, Assembly> = HashMap::new();
     contracts.insert(entry_address, assembly);
@@ -619,7 +619,7 @@ pub async fn run_vm_multi_contracts(
     known_bytecodes: Vec<Vec<[u8; 32]>>,
     factory_deps: HashMap<H256, Vec<[u8; 32]>>,
     default_aa_code_hash: U256,
-) -> VmSnapshot {
+) -> anyhow::Result<VmSnapshot> {
     use zkevm_assembly::{get_encoding_mode, RunningVmEncodingMode};
     let encoding_mode = get_encoding_mode();
     match encoding_mode {
@@ -683,7 +683,7 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     known_bytecodes: Vec<Vec<[u8; 32]>>,
     factory_deps: HashMap<H256, Vec<[u8; 32]>>,
     default_aa_code_hash: U256,
-) -> VmSnapshot {
+) -> anyhow::Result<VmSnapshot> {
     let mut contracts = contracts;
     for (a, c) in contracts.iter_mut() {
         match c.compile_to_bytecode_for_mode::<N, E>() {
@@ -750,7 +750,7 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     // fill the calldata
     let aligned_calldata = calldata_to_aligned_data(&calldata);
     // and initial memory page
-    let initial_assembly = contracts.get(&entry_address).cloned().unwrap();
+    let initial_assembly = contracts.get(&entry_address).cloned().ok_or_else(|| anyhow::anyhow!("Initial assembly not found"))?;
     let initial_bytecode = initial_assembly
         .clone()
         .compile_to_bytecode_for_mode::<N, E>()
@@ -1037,7 +1037,7 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
 
     let serialized_events = serde_json::to_string_pretty(&compiler_tests_events).unwrap();
 
-    VmSnapshot {
+    Ok(VmSnapshot {
         registers: local_state.registers,
         flags: local_state.flags,
         timestamp: local_state.timestamp,
@@ -1059,7 +1059,7 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
         events,
         serialized_events,
         num_cycles_used: cycles_used,
-    }
+    })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
