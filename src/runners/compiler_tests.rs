@@ -44,7 +44,7 @@ pub enum VmLaunchOption {
     Label(String),
     Call,
     Constructor,
-    ManualCallABI(FullABIParams)
+    ManualCallABI(FullABIParams),
 }
 
 #[derive(Debug)]
@@ -59,25 +59,22 @@ pub enum VmExecutionResult {
 pub struct VmExecutionContext {
     pub this_address: Address,
     pub msg_sender: Address,
-    pub block_number: u64,
+    pub u128_value: u128,
     pub transaction_index: u32,
-    pub block_timestamp: u64,
 }
 
 impl VmExecutionContext {
     pub fn new(
         this_address: Address,
         msg_sender: Address,
-        block_number: u64,
+        u128_value: u128,
         transaction_index: u32,
-        block_timestamp: u64,
     ) -> Self {
         Self {
             this_address,
             msg_sender,
-            block_number,
+            u128_value,
             transaction_index,
-            block_timestamp,
         }
     }
 }
@@ -353,14 +350,10 @@ pub async fn run_vm(
     assembly: Assembly,
     calldata: Vec<u8>,
     storage: HashMap<StorageKey, H256>,
-    registers: Vec<U256>,
     context: Option<VmExecutionContext>,
     vm_launch_option: VmLaunchOption,
     cycles_limit: usize,
-    max_stack_size: usize,
-    known_contracts: Vec<Assembly>,
-    known_bytecodes: Vec<Vec<[u8; 32]>>,
-    factory_deps: HashMap<H256, Vec<[u8; 32]>>,
+    known_contracts: HashMap<U256, Assembly>,
     default_aa_code_hash: U256,
 ) -> anyhow::Result<VmSnapshot> {
     let entry_address = default_entry_point_contract_address();
@@ -371,15 +364,11 @@ pub async fn run_vm(
         contracts,
         calldata,
         storage,
-        registers,
         entry_address,
         context,
         vm_launch_option,
         cycles_limit,
-        max_stack_size,
         known_contracts,
-        known_bytecodes,
-        factory_deps,
         default_aa_code_hash,
     )
     .await
@@ -419,11 +408,8 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
     tools: &'a mut ExtendedTestingTools<B>,
     block_properties: &'a BlockProperties,
     context: VmExecutionContext,
-    registers: Vec<U256>,
     contracts: &HashMap<Address, Assembly>,
-    known_contracts: Vec<Assembly>,
-    known_bytecodes: Vec<Vec<[u8; 32]>>,
-    factory_deps: HashMap<H256, Vec<[u8; 32]>>,
+    known_contracts: HashMap<U256, Assembly>,
     initial_pc: E::PcOrImm,
 ) -> (
     VmState<
@@ -441,21 +427,9 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
 ) {
     use zk_evm::contract_bytecode_to_words;
     use zk_evm::utils::bytecode_to_code_hash;
-    // fill the decommitter and storage slots with contract codes, etc
+    // fill the decommitter
 
-    // first deployed contracts. Those are stored under DEPLOYER_CONTRACT as raw address -> hash
-    let mut storage_els = vec![];
-
-    let mut factory_deps: HashMap<U256, Vec<U256>> = factory_deps
-        .into_iter()
-        .map(|(k, v)| {
-            (
-                U256::from_big_endian(k.as_bytes()),
-                contract_bytecode_to_words(&v),
-            )
-        })
-        .collect();
-
+    let mut factory_deps: HashMap<U256, Vec<U256>> = HashMap::new();
     let mut reverse_lookup_for_assembly = HashMap::new();
 
     for (address, assembly) in contracts.iter() {
@@ -472,44 +446,21 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
         // add to decommitter
         let bytecode_words = contract_bytecode_to_words(&bytecode);
         let _existing = factory_deps.insert(bytecode_hash_as_u256, bytecode_words);
-
-        // we write into DEPLOYER that for key == address we have bytecode == bytecode hash
-        storage_els.push((
-            0,
-            *DEPLOYER_SYSTEM_CONTRACT_ADDRESS,
-            address_as_u256,
-            bytecode_hash_as_u256,
-        ));
-        // we write into FACTORY that for key == bytecode hash we have marker to know it
-        storage_els.push((
-            0,
-            *KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
-            bytecode_hash_as_u256,
-            U256::from(1u64),
-        ));
     }
 
-    for assembly in known_contracts.into_iter() {
+    for (bytecode_hash, assembly) in known_contracts.into_iter() {
         let mut assembly = assembly;
         let bytecode = assembly
             .compile_to_bytecode_for_mode::<N, E>()
             .expect("must compile an assembly");
-        let bytecode_hash = bytecode_to_code_hash(&bytecode).unwrap();
         let bytecode_words = contract_bytecode_to_words(&bytecode);
-        let _ = factory_deps.insert(U256::from_big_endian(&bytecode_hash), bytecode_words);
-        reverse_lookup_for_assembly.insert(U256::from_big_endian(&bytecode_hash), assembly);
-    }
-
-    for bytecode in known_bytecodes.into_iter() {
-        let bytecode_hash = bytecode_to_code_hash(&bytecode).unwrap();
-        let bytecode_words = contract_bytecode_to_words(&bytecode);
-        let _ = factory_deps.insert(U256::from_big_endian(&bytecode_hash), bytecode_words);
+        let _ = factory_deps.insert(bytecode_hash, bytecode_words);
+        reverse_lookup_for_assembly.insert(bytecode_hash, assembly);
     }
 
     let decommitter_els: Vec<_> = factory_deps.into_iter().into_iter().collect();
 
     tools.decommittment_processor.populate(decommitter_els);
-    tools.storage.populate(storage_els);
 
     let mut vm = VmState::empty_state(
         &mut tools.storage,
@@ -520,11 +471,6 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
         &mut tools.witness_tracer,
         block_properties,
     );
-
-    for (i, value) in registers.into_iter().enumerate() {
-        let as_primitive = PrimitiveValue::from_value(value);
-        vm.perform_dst1_update(as_primitive, (i + 1) as u8);
-    }
 
     let initial_context = CallStackEntry {
         this_address: context.this_address,
@@ -541,7 +487,7 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
         code_shard_id: 0,
         is_static: false,
         is_local_frame: false,
-        context_u128_value: 0,
+        context_u128_value: context.u128_value,
         heap_bound: 0,
         aux_heap_bound: 0,
     };
@@ -609,15 +555,11 @@ pub async fn run_vm_multi_contracts(
     contracts: HashMap<Address, Assembly>,
     calldata: Vec<u8>,
     storage: HashMap<StorageKey, H256>,
-    registers: Vec<U256>,
     entry_address: Address,
     context: Option<VmExecutionContext>,
     vm_launch_option: VmLaunchOption,
     cycles_limit: usize,
-    _max_stack_size: usize,
-    known_contracts: Vec<Assembly>,
-    known_bytecodes: Vec<Vec<[u8; 32]>>,
-    factory_deps: HashMap<H256, Vec<[u8; 32]>>,
+    known_contracts: HashMap<U256, Assembly>,
     default_aa_code_hash: U256,
 ) -> anyhow::Result<VmSnapshot> {
     use zkevm_assembly::{get_encoding_mode, RunningVmEncodingMode};
@@ -629,15 +571,11 @@ pub async fn run_vm_multi_contracts(
                 contracts,
                 calldata,
                 storage,
-                registers,
                 entry_address,
                 context,
                 vm_launch_option,
                 cycles_limit,
-                _max_stack_size,
                 known_contracts,
-                known_bytecodes,
-                factory_deps,
                 default_aa_code_hash,
             )
             .await
@@ -648,15 +586,11 @@ pub async fn run_vm_multi_contracts(
                 contracts,
                 calldata,
                 storage,
-                registers,
                 entry_address,
                 context,
                 vm_launch_option,
                 cycles_limit,
-                _max_stack_size,
                 known_contracts,
-                known_bytecodes,
-                factory_deps,
                 default_aa_code_hash,
             )
             .await
@@ -673,15 +607,11 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     contracts: HashMap<Address, Assembly>,
     calldata: Vec<u8>,
     storage: HashMap<StorageKey, H256>,
-    registers: Vec<U256>,
     entry_address: Address,
     context: Option<VmExecutionContext>,
     vm_launch_option: VmLaunchOption,
     cycles_limit: usize,
-    _max_stack_size: usize,
-    known_contracts: Vec<Assembly>,
-    known_bytecodes: Vec<Vec<[u8; 32]>>,
-    factory_deps: HashMap<H256, Vec<[u8; 32]>>,
+    known_contracts: HashMap<U256, Assembly>,
     default_aa_code_hash: U256,
 ) -> anyhow::Result<VmSnapshot> {
     let mut contracts = contracts;
@@ -781,11 +711,8 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
         &mut tools,
         &block_properties,
         context,
-        registers,
         &contracts,
         known_contracts,
-        known_bytecodes,
-        factory_deps,
         initial_pc,
     );
 

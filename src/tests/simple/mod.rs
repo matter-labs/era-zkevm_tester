@@ -17,19 +17,20 @@ pub(crate) fn run_for_result_only(assembly_text: &str) {
 
     use futures::executor::block_on;
     let assembly = Assembly::try_from(assembly_text.to_owned()).unwrap();
+    let bytecode = assembly.clone().compile_to_bytecode().unwrap();
+    let hash = U256::from(zk_evm::utils::bytecode_to_code_hash(&bytecode).unwrap());
+    let mut known_contracts = HashMap::new();
+    known_contracts.insert(hash, assembly.clone());
+
     let snapshot = block_on(run_vm(
         "manual".to_owned(),
         assembly.clone(),
         vec![],
         HashMap::new(),
-        vec![],
         None,
         VmLaunchOption::Default,
-        1024,
         u16::MAX as usize,
-        vec![assembly.clone()],
-        vec![],
-        HashMap::new(),
+        known_contracts,
         U256::zero(),
     )).unwrap();
 

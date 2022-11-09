@@ -124,10 +124,7 @@ pub fn run_text_assembly_full_trace(
         &mut tools,
         &block_properties,
         context,
-        vec![],
         &known_contracts,
-        vec![],
-        vec![],
         HashMap::new(),
         0,
     );
@@ -679,19 +676,19 @@ pub(crate) fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_tex
 
     use futures::executor::block_on;
     let assembly = Assembly::try_from(assembly_text.to_owned()).unwrap();
+    let bytecode = assembly.clone().compile_to_bytecode().unwrap();
+    let hash = U256::from(zk_evm::utils::bytecode_to_code_hash(&bytecode).unwrap());
+    let mut known_contracts = HashMap::new();
+    known_contracts.insert(hash, assembly.clone());
     let snapshot = block_on(run_vm(
         "manual".to_owned(),
         assembly.clone(),
         calldata,
         HashMap::new(),
-        vec![],
         None,
         options,
-        1024,
         u16::MAX as usize,
-        vec![assembly.clone()],
-        vec![],
-        HashMap::new(),
+        known_contracts,
         U256::zero(),
     )).unwrap();
 
@@ -739,6 +736,10 @@ pub(crate) fn run_inner_with_context(
 
     use futures::executor::block_on;
     let assembly = Assembly::try_from(assembly_text.to_owned()).unwrap();
+    let bytecode = assembly.clone().compile_to_bytecode().unwrap();
+    let hash = U256::from(zk_evm::utils::bytecode_to_code_hash(&bytecode).unwrap());
+    let mut known_contracts = HashMap::new();
+    known_contracts.insert(hash, assembly.clone());
     let entry_address = context.this_address;
     let mut contracts: HashMap<Address, Assembly> = HashMap::new();
     contracts.insert(entry_address, assembly.clone());
@@ -747,15 +748,11 @@ pub(crate) fn run_inner_with_context(
         contracts,
         calldata,
         HashMap::new(),
-        vec![],
         entry_address,
         Some(context),
         options,
-        1024,
         u16::MAX as usize,
-        vec![assembly.clone()],
-        vec![],
-        HashMap::new(),
+        known_contracts,
         U256::zero(),
     )).unwrap();
 
