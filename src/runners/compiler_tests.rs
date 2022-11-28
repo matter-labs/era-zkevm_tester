@@ -10,10 +10,12 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::atomic::AtomicU64;
 use zk_evm::block_properties::*;
-use zk_evm::opcodes::execution::ret::*;
-use zk_evm::precompiles::DEPLOYER_SYSTEM_CONTRACT_ADDRESS;
+use zk_evm::zkevm_opcode_defs::system_params::{
+    DEPLOYER_SYSTEM_CONTRACT_ADDRESS,
+};
+use zk_evm::zkevm_opcode_defs::definitions::ret::RET_IMPLICIT_RETURNDATA_PARAMS_REGISTER;
 use zk_evm::precompiles::{
-    DefaultPrecompilesProcessor, KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
+    DefaultPrecompilesProcessor,
 };
 use zk_evm::reference_impls::decommitter::SimpleDecommitter;
 use zk_evm::reference_impls::event_sink::{EventMessage, InMemoryEventSink};
