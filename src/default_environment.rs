@@ -75,7 +75,7 @@ pub fn create_vm_with_default_settings<'a, const B: bool>(
         sp: 0u16,
         pc: 0u16,
         exception_handler_location: 0u16,
-        ergs_remaining: u32::MAX,
+        ergs_remaining: zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS,
         this_shard_id: 0,
         caller_shard_id: 0,
         code_shard_id: 0,
