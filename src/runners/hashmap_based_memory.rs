@@ -105,6 +105,36 @@ use zk_evm::aux_structures::MemoryQuery;
 use zk_evm::vm_state::PrimitiveValue;
 
 impl Memory for SimpleHashmapMemory {
+    fn read_code_query(
+        &self,
+        _monotonic_cycle_counter: u32,
+        query: MemoryQuery,
+    ) -> MemoryQuery {
+        assert!(query.rw_flag == false);
+
+        if let Some(existing) = self.inner.get(&query.location.page.0) {
+            if let Some(value) = existing.get(&query.location.index.0) {
+                let mut query = query;
+                query.value_is_pointer = value.is_pointer;
+                query.value = value.value;
+    
+                query
+            } else {
+                let mut query = query;
+                query.value_is_pointer = false;
+                query.value = U256::zero();
+    
+                query
+            }
+        } else {
+            let mut query = query;
+            query.value_is_pointer = false;
+            query.value = U256::zero();
+
+            query
+        }
+    }
+
     fn execute_partial_query(
         &mut self,
         _monotonic_cycle_counter: u32,

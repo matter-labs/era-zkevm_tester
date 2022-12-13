@@ -9,228 +9,66 @@ mod tests {
 
     #[test]
     fn test_manual() {
-        let assembly: &'static str = r#"
+    //     let assembly: &'static str = r#"
+	// 	.text
+	// 	.file	"calldata_array_order.sol:Test"
+	// 	.text.unlikely.
+	// 	.globl	__entry
+	// __entry:
+	// 	add 256, r1, r1
+	// 	add 64, r0, r2
+	// 	add 128, r0, r3
+	// 	add 256, r0, r4
+	// 	st.1.inc r1, r2, r1
+	// 	st.1.inc r1, r3, r1
+	// 	st.1 r1, r4
+	// 	add 128, r0, r1
+	// 	shl.s 32, r1, r1
+	// 	add 256, r1, r1
+	// 	shl.s 64, r1, r1
+	// 	ret.ok r1
+	// "#;
+
+	// let assembly: &'static str = r#"
+	// 	.text
+	// 	.file	"calldata_array_order.sol:Test"
+	// 	.text.unlikely.
+	// 	.globl	__entry
+	// __entry:
+	// 	near_call r0, @inner, @catch_all
+	// 	ret.ok r1
+	// inner:
+	// 	event.first r0, r0
+	// 	add r0, r0, r1
+	// 	ret.ok.to_label r1, @DEFAULT_FAR_RETURN
+	// catch_all:
+	// 	ret.panic r0
+	// "#;
+
+	// let assembly: &'static str = r#"
+	// 	.text
+	// 	.file	"calldata_array_order.sol:Test"
+	// 	.text.unlikely.
+	// 	.globl	__entry
+	// __entry:
+	// 	near_call r0, @__entry, @panic_handler
+	// 	ret.ok r0
+	// panic_handler:
+	// 	ret.panic r0
+	// "#;
+
+	let assembly: &'static str = r#"
 		.text
-		.file    "Test"
+		.file	"calldata_array_order.sol:Test"
 		.text.unlikely.
-		.globl    __entry
+		.globl	__entry
 	__entry:
-	.func_begin0:
-		ptr.add    r1, r0, stack[@ptr_calldata]
-		shr.s    96, r1, r1
-		and    @CPI0_0[0], r1, stack[@calldatasize]
-		sub.s!    0, r2, r1
-		context.sp r15
-		jump.eq    @.BB0_2
-		add    32, r0, r1
-		add    256, r0, r2
-		st.1    r2, r1
-		add    288, r0, r1
-		st.1    r1, r0
-		add    @CPI0_1[0], r0, r1
-		ret.ok.to_label    r1, @DEFAULT_FAR_RETURN
-	.BB0_2:
-		near_call    r0, @__runtime, @DEFAULT_UNWIND
-	.func_end0:
-	
-	__runtime:
-	.func_begin1:
-		nop    stack+=[4]
-		add    128, r0, r1
-		add    64, r0, r5
-		st.1    r5, r1
-		add    stack[@calldatasize], r0, r2
-		sub.s!    4, r2, r2
-		jump.lt    @.BB1_4
-		ptr.add    stack[@ptr_calldata], r0, r2
-		ld    r2, r2
-		shr.s    224, r2, r2
-		sub.s!    @CPI1_0[0], r2, r3
-		jump.eq    @.BB1_5
-		sub.s!    @CPI1_1[0], r2, r1
-		jump.eq    @.BB1_9
-		sub.s!    @CPI1_2[0], r2, r1
-		jump.ne    @.BB1_4
-		near_call    r0, @external_fun_g, @DEFAULT_UNWIND
-	.BB1_4:
-		add    r0, r0, r1
-		ret.revert.to_label    r1, @DEFAULT_FAR_REVERT
-	.BB1_9:
-		near_call    r0, @external_fun_h, @DEFAULT_UNWIND
-	.BB1_5:
-		add    @CPI1_3[0], r0, r2
-		st.1    r1, r2
-		context.ergs_left    r1
-		context.this    r2
-		sub.s!    4, r2, r1
-		jump.eq    @.BB1_8
-		add    @CPI1_4[0], r0, r1
-		context.sp    r3
-		sub.s    4, r3, r3
-		mul    32, r3, r3, r0
-		add    r3, r0, stack-[1]
-		add    r5, r0, stack-[2]
-		near_call    r0, @__farcall, @DEFAULT_UNWIND
-		add    stack-[2], 0, r5
-		add    stack-[1], 0, r1
-		ptr.add    stack-[0], r0, r1
-		add    r0, r0, r2
-	.BB1_7:
-		ptr.add    r1, r2, r3
-		ld    r3, r3
-		shl.s    5, r2, r4
-		add    128, r4, r4
-		st.1    r4, r3
-		add    1, r2, r3
-		sub!    r3, r2, r2
-		add    0, r0, r2
-		add.lt    1, r0, r2
-		and    1, r2, r2
-		sub.s!    0, r2, r2
-		add    r3, r0, r2
-		jump.ne    @.BB1_7
-	.BB1_8:
-		ld.1    r5, r1
-		shl.s    64, r1, r1
-		and    @CPI1_5[0], r1, r1
-		or    @CPI1_6[0], r1, r1
-		ret.ok.to_label    r1, @DEFAULT_FAR_RETURN
-	.func_end1:
-	
-	external_fun_g:
-	.func_begin2:
-		nop    stack+=[5]
-		add    64, r0, r1
-		ld.1    r1, r4
-		add    @CPI2_0[0], r0, r1
-		st.1    r4, r1
-		shl.s    64, r4, r1
-		and    @CPI2_1[0], r1, r6
-		context.ergs_left    r1
-		context.this    r2
-		sub.s!    4, r2, r1
-		jump.eq    @.BB2_3
-		or    @CPI2_2[0], r6, r1
-		context.sp    r3
-		sub.s    5, r3, r3
-		mul    32, r3, r3, r0
-		add    r3, r0, stack-[1]
-		add    r4, r0, stack-[3]
-		add    r6, r0, stack-[2]
-		near_call    r0, @__farcall, @DEFAULT_UNWIND
-		add    stack-[2], 0, r6
-		add    stack-[3], 0, r5
-		add    stack-[1], 0, r1
-		ptr.add    stack-[0], r0, r1
-		add    r0, r0, r2
-	.BB2_2:
-		shl.s    5, r2, r3
-		add    r5, r3, r3
-		ptr.add    r1, r2, r4
-		ld    r4, r4
-		st.1    r3, r4
-		add    1, r2, r3
-		sub!    r3, r2, r2
-		add    0, r0, r2
-		add.lt    1, r0, r2
-		and    1, r2, r2
-		sub.s!    0, r2, r2
-		add    r3, r0, r2
-		jump.ne    @.BB2_2
-	.BB2_3:
-		or    @CPI2_3[0], r6, r1
-		ret.ok.to_label    r1, @DEFAULT_FAR_RETURN
-	.func_end2:
-	
-	external_fun_h:
-	.func_begin3:
-		add    64, r0, r1
-		ld.1    r1, r1
-		add    1, r0, r2
-		st.1    r1, r2
-		shl.s    64, r1, r1
-		and    @CPI3_0[0], r1, r1
-		or    @CPI3_1[0], r1, r1
-		ret.ok.to_label    r1, @DEFAULT_FAR_RETURN
-	.func_end3:
-	
-		.text
-	__farcall:
-	.func_begin4:
-		nop    stack+=[2]
-		add    r3, r0, stack-[2]
-		add    32, r3, r3
-		add    r3, r0, stack-[1]
-	.tmp0:
-		far_call    r1, r2, @.BB4_2
-	.tmp1:
-		add    stack-[2], 0, r3
-		ptr.add    r1, r0, stack-[0]
-		add    @CPI4_1[0], r0, r1
-		add    stack-[1], 0, r2
-		div.s    32, r2, r2, r0
-		or    stack[r2 - 0], r1, stack[r2 - 0]
-		add    r3, r0, r1
-		nop    stack-=[2]
-		ret
-	.BB4_2:
-	.tmp2:
-		add    stack-[2], 0, r3
-		ptr.add    r1, r0, stack-[0]
-		add    @CPI4_0[0], r0, r1
-		add    stack-[1], 0, r2
-		div.s    32, r2, r2, r0
-		and    stack[r2 - 0], r1, stack[r2 - 0]
-		add    r3, r0, r1
-		nop    stack-=[2]
-		ret
-	.func_end4:
-	
-		.data
-		.p2align    5
-	ptr_calldata:
-	.cell    0
-	
-		.p2align    5
-	calldatasize:
-		.cell 0
-	
-		.note.GNU-stack
-		.rodata
-	CPI0_0:
-		.cell 4294967295
-	CPI0_1:
-		.cell 5070602405635284088856458035200
-	CPI1_0:
-		.cell 638722032
-	CPI1_1:
-		.cell 3100234597
-	CPI1_2:
-		.cell 3793197966
-	CPI1_3:
-		.cell -32209929846540938521459328741188683220697693702594694597354042771689894313984
-	CPI1_4:
-		.cell 316912652418240591808998408192
-	CPI1_5:
-	CPI2_1:
-	CPI3_0:
-		.cell 79228162495817593519834398720
-	CPI1_6:
-	CPI2_3:
-	CPI3_1:
-		.cell 2535301200456458802993406410752
-	CPI2_0:
-		.cell 17219911917854084299749778639755835327755045716242581057573779540915269926912
-	CPI2_2:
-		.cell 316912650057057350374175801344
-	CPI4_0:
-		.cell 57896044618658097711785492504343953926634992332820282019728792003956564819967
-	CPI4_1:
-		.cell -57896044618658097711785492504343953926634992332820282019728792003956564819968
-                "#;
-
-		
-
+		context.this r2
+		far_call r0, r2, @panic_handler
+		ret.ok r0
+	panic_handler:
+		ret.revert r0
+	"#;
         set_tracing_mode(VmTracingOptions::ManualVerbose);
         run_inner(vec![], VmLaunchOption::Default, assembly);
 
