@@ -37,6 +37,7 @@ pub struct FullABIParams {
     pub is_system_call: bool,
     pub r3_value: Option<U256>,
     pub r4_value: Option<U256>,
+    pub r5_value: Option<U256>,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Hash)]
@@ -659,6 +660,7 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
                     is_system_call: false,
                     r3_value: None,
                     r4_value: None,
+                    r5_value: None,
                 }),
             )
         },
@@ -737,10 +739,12 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
 
             let r3_value = extra_props.r3_value.unwrap_or(U256::zero());
             let r4_value = extra_props.r4_value.unwrap_or(U256::zero());
+            let r5_value = extra_props.r5_value.unwrap_or(U256::zero());
 
             vm.local_state.registers[1] = PrimitiveValue::from_value(r2_value);
             vm.local_state.registers[2] = PrimitiveValue::from_value(r3_value);
             vm.local_state.registers[3] = PrimitiveValue::from_value(r4_value);
+            vm.local_state.registers[4] = PrimitiveValue::from_value(r5_value);
         }
     }
 
