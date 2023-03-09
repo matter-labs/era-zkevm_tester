@@ -8,8 +8,8 @@ resolver = "2"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-zk_evm = { git = "https://github.com/matter-labs/zk_evm", branch = "v1.3.1" }
-zkevm-assembly = { git = "https://github.com/matter-labs/zkEVM-assembly", branch = "v1.3.1" }
+zk_evm = { git = "https://github.com/matter-labs/era-zk_evm", branch = "main" }
+zkevm-assembly = { git = "https://github.com/matter-labs/era-zkEVM-assembly", branch = "main" }
 
 # zk_evm = {path = "../zk_evm"}
 # zkevm-assembly = {path = "../zkEVM-assembly"}
