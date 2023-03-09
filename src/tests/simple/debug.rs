@@ -9,55 +9,55 @@ mod tests {
 
     #[test]
     fn test_manual() {
-    //     let assembly: &'static str = r#"
-	// 	.text
-	// 	.file	"calldata_array_order.sol:Test"
-	// 	.text.unlikely.
-	// 	.globl	__entry
-	// __entry:
-	// 	add 256, r1, r1
-	// 	add 64, r0, r2
-	// 	add 128, r0, r3
-	// 	add 256, r0, r4
-	// 	st.1.inc r1, r2, r1
-	// 	st.1.inc r1, r3, r1
-	// 	st.1 r1, r4
-	// 	add 128, r0, r1
-	// 	shl.s 32, r1, r1
-	// 	add 256, r1, r1
-	// 	shl.s 64, r1, r1
-	// 	ret.ok r1
-	// "#;
+        //     let assembly: &'static str = r#"
+        // 	.text
+        // 	.file	"calldata_array_order.sol:Test"
+        // 	.text.unlikely.
+        // 	.globl	__entry
+        // __entry:
+        // 	add 256, r1, r1
+        // 	add 64, r0, r2
+        // 	add 128, r0, r3
+        // 	add 256, r0, r4
+        // 	st.1.inc r1, r2, r1
+        // 	st.1.inc r1, r3, r1
+        // 	st.1 r1, r4
+        // 	add 128, r0, r1
+        // 	shl.s 32, r1, r1
+        // 	add 256, r1, r1
+        // 	shl.s 64, r1, r1
+        // 	ret.ok r1
+        // "#;
 
-	// let assembly: &'static str = r#"
-	// 	.text
-	// 	.file	"calldata_array_order.sol:Test"
-	// 	.text.unlikely.
-	// 	.globl	__entry
-	// __entry:
-	// 	near_call r0, @inner, @catch_all
-	// 	ret.ok r1
-	// inner:
-	// 	event.first r0, r0
-	// 	add r0, r0, r1
-	// 	ret.ok.to_label r1, @DEFAULT_FAR_RETURN
-	// catch_all:
-	// 	ret.panic r0
-	// "#;
+        // let assembly: &'static str = r#"
+        // 	.text
+        // 	.file	"calldata_array_order.sol:Test"
+        // 	.text.unlikely.
+        // 	.globl	__entry
+        // __entry:
+        // 	near_call r0, @inner, @catch_all
+        // 	ret.ok r1
+        // inner:
+        // 	event.first r0, r0
+        // 	add r0, r0, r1
+        // 	ret.ok.to_label r1, @DEFAULT_FAR_RETURN
+        // catch_all:
+        // 	ret.panic r0
+        // "#;
 
-	// let assembly: &'static str = r#"
-	// 	.text
-	// 	.file	"calldata_array_order.sol:Test"
-	// 	.text.unlikely.
-	// 	.globl	__entry
-	// __entry:
-	// 	near_call r0, @__entry, @panic_handler
-	// 	ret.ok r0
-	// panic_handler:
-	// 	ret.panic r0
-	// "#;
+        // let assembly: &'static str = r#"
+        // 	.text
+        // 	.file	"calldata_array_order.sol:Test"
+        // 	.text.unlikely.
+        // 	.globl	__entry
+        // __entry:
+        // 	near_call r0, @__entry, @panic_handler
+        // 	ret.ok r0
+        // panic_handler:
+        // 	ret.panic r0
+        // "#;
 
-	let assembly: &'static str = r#"
+        let assembly: &'static str = r#"
 		.text
 		.file	"calldata_array_order.sol:Test"
 		.text.unlikely.

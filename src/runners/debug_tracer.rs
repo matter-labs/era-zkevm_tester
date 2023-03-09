@@ -165,31 +165,35 @@ impl<const N: usize, E: VmEncodingMode<N>> Tracer<N, E> for DebugTracerWithAssem
 
                         let mut abi = RetABI::from_u256(src0.value);
                         match abi.page_forwarding_mode {
-                            RetForwardPageType::ForwardFatPointer => {},
+                            RetForwardPageType::ForwardFatPointer => {}
                             RetForwardPageType::UseHeap => {
-                                abi.memory_quasi_fat_pointer.memory_page = CallStackEntry::<N, E>::heap_page_from_base(
-                                    state
-                                        .vm_local_state
-                                        .callstack
-                                        .get_current_stack()
-                                        .base_memory_page,
-                                ).0;
-                            },
+                                abi.memory_quasi_fat_pointer.memory_page =
+                                    CallStackEntry::<N, E>::heap_page_from_base(
+                                        state
+                                            .vm_local_state
+                                            .callstack
+                                            .get_current_stack()
+                                            .base_memory_page,
+                                    )
+                                    .0;
+                            }
                             RetForwardPageType::UseAuxHeap => {
-                                abi.memory_quasi_fat_pointer.memory_page = CallStackEntry::<N, E>::aux_heap_page_from_base(
-                                    state
-                                        .vm_local_state
-                                        .callstack
-                                        .get_current_stack()
-                                        .base_memory_page,
-                                ).0;
-                            },
+                                abi.memory_quasi_fat_pointer.memory_page =
+                                    CallStackEntry::<N, E>::aux_heap_page_from_base(
+                                        state
+                                            .vm_local_state
+                                            .callstack
+                                            .get_current_stack()
+                                            .base_memory_page,
+                                    )
+                                    .0;
+                            }
                         };
 
                         let returndata =
                             crate::runners::compiler_tests::dump_memory_page_using_fat_pointer(
                                 memory,
-                                abi.memory_quasi_fat_pointer
+                                abi.memory_quasi_fat_pointer,
                             );
 
                         println!(
@@ -210,32 +214,35 @@ impl<const N: usize, E: VmEncodingMode<N>> Tracer<N, E> for DebugTracerWithAssem
 
                 let mut abi = FarCallABI::from_u256(src0.value);
                 match abi.forwarding_mode {
-                    FarCallForwardPageType::ForwardFatPointer => {},
+                    FarCallForwardPageType::ForwardFatPointer => {}
                     FarCallForwardPageType::UseHeap => {
-                        abi.memory_quasi_fat_pointer.memory_page = CallStackEntry::<N, E>::heap_page_from_base(
-                            state
-                                .vm_local_state
-                                .callstack
-                                .get_current_stack()
-                                .base_memory_page,
-                        ).0;
-                    },
+                        abi.memory_quasi_fat_pointer.memory_page =
+                            CallStackEntry::<N, E>::heap_page_from_base(
+                                state
+                                    .vm_local_state
+                                    .callstack
+                                    .get_current_stack()
+                                    .base_memory_page,
+                            )
+                            .0;
+                    }
                     FarCallForwardPageType::UseAuxHeap => {
-                        abi.memory_quasi_fat_pointer.memory_page = CallStackEntry::<N, E>::aux_heap_page_from_base(
-                            state
-                                .vm_local_state
-                                .callstack
-                                .get_current_stack()
-                                .base_memory_page,
-                        ).0;
-                    },
+                        abi.memory_quasi_fat_pointer.memory_page =
+                            CallStackEntry::<N, E>::aux_heap_page_from_base(
+                                state
+                                    .vm_local_state
+                                    .callstack
+                                    .get_current_stack()
+                                    .base_memory_page,
+                            )
+                            .0;
+                    }
                 }
 
-                let calldata =
-                    crate::runners::compiler_tests::dump_memory_page_using_fat_pointer(
-                        memory,
-                        abi.memory_quasi_fat_pointer
-                    );
+                let calldata = crate::runners::compiler_tests::dump_memory_page_using_fat_pointer(
+                    memory,
+                    abi.memory_quasi_fat_pointer,
+                );
 
                 println!(
                     "Performed far_call to {:?} with {} bytes with 0x{}",

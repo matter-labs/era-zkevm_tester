@@ -5,9 +5,9 @@ use std::ops::Add;
 
 use serde::{Deserialize, Serialize};
 use zk_evm::zkevm_opcode_defs::decoding::{AllowedPcOrImm, EncodingModeProduction, VmEncodingMode};
-use zk_evm::zkevm_opcode_defs::{Opcode, REGISTERS_COUNT, FatPointer};
+use zk_evm::zkevm_opcode_defs::{FatPointer, Opcode, REGISTERS_COUNT};
 
-use crate::runners::compiler_tests::{VmTracingOptions};
+use crate::runners::compiler_tests::VmTracingOptions;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ContractSourceDebugInfo {
@@ -76,7 +76,7 @@ pub struct VmTrace {
 
 use crate::default_environment::*;
 use crate::runners::compiler_tests::calldata_to_aligned_data;
-use zk_evm::{testing::*, bytecode_to_code_hash};
+use zk_evm::{bytecode_to_code_hash, testing::*};
 
 pub fn run_text_assembly_full_trace(
     assembly: String,
@@ -132,20 +132,17 @@ pub fn run_text_assembly_full_trace(
     use zk_evm::contract_bytecode_to_words;
 
     // set registers r1-r4 for external call convension
-    vm.local_state.registers[0] = crate::utils::form_initial_calldata_ptr(CALLDATA_PAGE, calldata.len() as u32);
+    vm.local_state.registers[0] =
+        crate::utils::form_initial_calldata_ptr(CALLDATA_PAGE, calldata.len() as u32);
     vm.local_state.registers[1] = PrimitiveValue::empty();
     vm.local_state.registers[2] = PrimitiveValue::empty();
     vm.local_state.registers[3] = PrimitiveValue::empty();
 
-    let mut tracer = VmDebugTracer::new_from_entry_point(
-        default_callee_address(),
-        &vm_assembly,
-    );
-    tracer.debug_info.insert(
-        Address::default(),
-        empty_callstack_dummy_debug_info
-    );
-    
+    let mut tracer = VmDebugTracer::new_from_entry_point(default_callee_address(), &vm_assembly);
+    tracer
+        .debug_info
+        .insert(Address::default(), empty_callstack_dummy_debug_info);
+
     for _ in 0..num_cycles {
         vm.cycle(&mut tracer);
     }
@@ -337,10 +334,12 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::abstractions::Tracer<N, E>
 
         // special case for initial cycle
         if self.did_call_recently {
-            let (calldata_page, range) = crate::runners::compiler_tests::fat_ptr_into_page_and_aligned_words_range(state.vm_local_state.registers[0]);
+            let (calldata_page, range) =
+                crate::runners::compiler_tests::fat_ptr_into_page_and_aligned_words_range(
+                    state.vm_local_state.registers[0],
+                );
 
-            let initial_calldata = 
-                memory.dump_page_content(calldata_page, range);
+            let initial_calldata = memory.dump_page_content(calldata_page, range);
             let len_words = initial_calldata.len();
 
             let initial_calldata = initial_calldata
@@ -359,15 +358,17 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::abstractions::Tracer<N, E>
         }
 
         if self.did_return_recently {
-            let (returndata_page, range) = crate::runners::compiler_tests::fat_ptr_into_page_and_aligned_words_range(state.vm_local_state.registers[0]);
-            
+            let (returndata_page, range) =
+                crate::runners::compiler_tests::fat_ptr_into_page_and_aligned_words_range(
+                    state.vm_local_state.registers[0],
+                );
+
             let mut fat_ptr = FatPointer::from_u256(state.vm_local_state.registers[0].value);
             if state.vm_local_state.registers[0].is_pointer == false {
                 fat_ptr = FatPointer::empty();
             }
             let returndata_len = fat_ptr.length - fat_ptr.offset;
-            let initial_returndata = memory
-                .dump_page_content(returndata_page, range);
+            let initial_returndata = memory.dump_page_content(returndata_page, range);
             let initial_returndata = initial_returndata
                 .into_iter()
                 .map(|el| format!("0x{}", hex::encode(&el)))
@@ -690,7 +691,8 @@ pub(crate) fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_tex
         u16::MAX as usize,
         known_contracts,
         U256::zero(),
-    )).unwrap();
+    ))
+    .unwrap();
 
     let VmSnapshot {
         registers,
@@ -754,7 +756,8 @@ pub(crate) fn run_inner_with_context(
         u16::MAX as usize,
         known_contracts,
         U256::zero(),
-    )).unwrap();
+    ))
+    .unwrap();
 
     let VmSnapshot {
         registers,

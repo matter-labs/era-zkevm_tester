@@ -105,11 +105,7 @@ use zk_evm::aux_structures::MemoryQuery;
 use zk_evm::vm_state::PrimitiveValue;
 
 impl Memory for SimpleHashmapMemory {
-    fn read_code_query(
-        &self,
-        _monotonic_cycle_counter: u32,
-        query: MemoryQuery,
-    ) -> MemoryQuery {
+    fn read_code_query(&self, _monotonic_cycle_counter: u32, query: MemoryQuery) -> MemoryQuery {
         assert!(query.rw_flag == false);
 
         if let Some(existing) = self.inner.get(&query.location.page.0) {
@@ -117,13 +113,13 @@ impl Memory for SimpleHashmapMemory {
                 let mut query = query;
                 query.value_is_pointer = value.is_pointer;
                 query.value = value.value;
-    
+
                 query
             } else {
                 let mut query = query;
                 query.value_is_pointer = false;
                 query.value = U256::zero();
-    
+
                 query
             }
         } else {
@@ -144,7 +140,9 @@ impl Memory for SimpleHashmapMemory {
             .inner
             .entry(query.location.page.0)
             .or_insert(HashMap::new());
-        let value = entry.entry(query.location.index.0).or_insert(PrimitiveValue::empty());
+        let value = entry
+            .entry(query.location.index.0)
+            .or_insert(PrimitiveValue::empty());
         if query.rw_flag {
             value.value = query.value;
             value.is_pointer = query.value_is_pointer;
@@ -157,10 +155,10 @@ impl Memory for SimpleHashmapMemory {
     }
 
     fn specialized_code_query(
-            &mut self,
-            monotonic_cycle_counter: u32,
-            query: MemoryQuery,
-        ) -> MemoryQuery {
+        &mut self,
+        monotonic_cycle_counter: u32,
+        query: MemoryQuery,
+    ) -> MemoryQuery {
         self.execute_partial_query(monotonic_cycle_counter, query)
     }
 }

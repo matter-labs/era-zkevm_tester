@@ -10,22 +10,18 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::atomic::AtomicU64;
 use zk_evm::block_properties::*;
-use zk_evm::zkevm_opcode_defs::system_params::{
-    DEPLOYER_SYSTEM_CONTRACT_ADDRESS,
-};
-use zk_evm::zkevm_opcode_defs::definitions::ret::RET_IMPLICIT_RETURNDATA_PARAMS_REGISTER;
-use zk_evm::precompiles::{
-    DefaultPrecompilesProcessor,
-};
+use zk_evm::precompiles::DefaultPrecompilesProcessor;
 use zk_evm::reference_impls::decommitter::SimpleDecommitter;
 use zk_evm::reference_impls::event_sink::{EventMessage, InMemoryEventSink};
 use zk_evm::testing::storage::InMemoryStorage;
 use zk_evm::vm_state::*;
-use zk_evm::zkevm_opcode_defs::FatPointer;
 use zk_evm::zkevm_opcode_defs::decoding::AllowedPcOrImm;
 use zk_evm::zkevm_opcode_defs::decoding::{
     EncodingModeProduction, EncodingModeTesting, VmEncodingMode,
 };
+use zk_evm::zkevm_opcode_defs::definitions::ret::RET_IMPLICIT_RETURNDATA_PARAMS_REGISTER;
+use zk_evm::zkevm_opcode_defs::system_params::DEPLOYER_SYSTEM_CONTRACT_ADDRESS;
+use zk_evm::zkevm_opcode_defs::FatPointer;
 use zk_evm::{aux_structures::*, GenericNoopTracer};
 use zkevm_assembly::Assembly;
 
@@ -187,14 +183,19 @@ pub(crate) fn dump_memory_page_using_fat_pointer(
     memory: &SimpleHashmapMemory,
     fat_ptr: FatPointer,
 ) -> Vec<u8> {
-    dump_memory_page_by_offset_and_length(memory, fat_ptr.memory_page, (fat_ptr.start + fat_ptr.offset) as usize, (fat_ptr.length - fat_ptr.offset) as usize)
+    dump_memory_page_by_offset_and_length(
+        memory,
+        fat_ptr.memory_page,
+        (fat_ptr.start + fat_ptr.offset) as usize,
+        (fat_ptr.length - fat_ptr.offset) as usize,
+    )
 }
 
 pub(crate) fn fat_ptr_into_page_and_aligned_words_range(
     ptr: PrimitiveValue,
 ) -> (u32, std::ops::Range<u32>) {
     if ptr.is_pointer == false {
-        return (0, 0..0)
+        return (0, 0..0);
     }
     let fat_ptr = FatPointer::from_u256(ptr.value);
     let beginning_word = (fat_ptr.start + fat_ptr.offset) / 32;
@@ -642,36 +643,27 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
                 .unwrap();
 
             (E::PcOrImm::from_u64_clipped(offset as u64), false, None)
-        },
+        }
         VmLaunchOption::Default | VmLaunchOption::Call => {
-            (
-                E::PcOrImm::from_u64_clipped(0u64), 
-                true, 
-                None,
-            )
-        },
-
-        VmLaunchOption::Constructor => {
-            (
-                E::PcOrImm::from_u64_clipped(0u64), 
-                true, 
-                Some(FullABIParams{
-                    is_constructor: true,
-                    is_system_call: false,
-                    r3_value: None,
-                    r4_value: None,
-                    r5_value: None,
-                }),
-            )
-        },
-        VmLaunchOption::ManualCallABI(value) => {
-            (
-                E::PcOrImm::from_u64_clipped(0u64), 
-                true, 
-                Some(value.clone()),
-            )
+            (E::PcOrImm::from_u64_clipped(0u64), true, None)
         }
 
+        VmLaunchOption::Constructor => (
+            E::PcOrImm::from_u64_clipped(0u64),
+            true,
+            Some(FullABIParams {
+                is_constructor: true,
+                is_system_call: false,
+                r3_value: None,
+                r4_value: None,
+                r5_value: None,
+            }),
+        ),
+        VmLaunchOption::ManualCallABI(value) => (
+            E::PcOrImm::from_u64_clipped(0u64),
+            true,
+            Some(value.clone()),
+        ),
     };
 
     let mut tools = create_default_testing_tools();
@@ -684,7 +676,10 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     // fill the calldata
     let aligned_calldata = calldata_to_aligned_data(&calldata);
     // and initial memory page
-    let initial_assembly = contracts.get(&entry_address).cloned().ok_or_else(|| anyhow::anyhow!("Initial assembly not found"))?;
+    let initial_assembly = contracts
+        .get(&entry_address)
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("Initial assembly not found"))?;
     let initial_bytecode = initial_assembly
         .clone()
         .compile_to_bytecode_for_mode::<N, E>()
@@ -722,7 +717,8 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
 
     if set_far_call_props {
         // we need to properly set calldata abi
-        vm.local_state.registers[0] = crate::utils::form_initial_calldata_ptr(CALLDATA_PAGE, calldata_length as u32);
+        vm.local_state.registers[0] =
+            crate::utils::form_initial_calldata_ptr(CALLDATA_PAGE, calldata_length as u32);
 
         vm.local_state.registers[1] = PrimitiveValue::empty();
         vm.local_state.registers[2] = PrimitiveValue::empty();
@@ -784,8 +780,12 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
                 for query in vm.witness_tracer.queries.drain(..) {
                     let memory_type = match query.location.memory_type {
                         zk_evm::abstractions::MemoryType::Heap => crate::trace::MemoryType::heap,
-                        zk_evm::abstractions::MemoryType::AuxHeap => crate::trace::MemoryType::aux_heap,
-                        zk_evm::abstractions::MemoryType::FatPointer => crate::trace::MemoryType::fat_ptr,
+                        zk_evm::abstractions::MemoryType::AuxHeap => {
+                            crate::trace::MemoryType::aux_heap
+                        }
+                        zk_evm::abstractions::MemoryType::FatPointer => {
+                            crate::trace::MemoryType::fat_ptr
+                        }
                         zk_evm::abstractions::MemoryType::Code => crate::trace::MemoryType::code,
                         zk_evm::abstractions::MemoryType::Stack => crate::trace::MemoryType::stack,
                     };

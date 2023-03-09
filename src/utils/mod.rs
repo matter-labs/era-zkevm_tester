@@ -34,7 +34,10 @@ impl<T: Clone + 'static, const N: usize> FixedLengthIterator<'static, T, N>
 {
 }
 
-use zk_evm::{vm_state::PrimitiveValue, zkevm_opcode_defs::{fat_pointer, FatPointer}};
+use zk_evm::{
+    vm_state::PrimitiveValue,
+    zkevm_opcode_defs::{fat_pointer, FatPointer},
+};
 
 use crate::U256;
 impl IntoFixedLengthByteIterator<32> for U256 {
@@ -58,7 +61,10 @@ impl IntoFixedLengthByteIterator<32> for U256 {
     }
 }
 
-pub(crate) fn form_initial_calldata_ptr(calldata_page: u32, calldata_length: u32) -> PrimitiveValue {
+pub(crate) fn form_initial_calldata_ptr(
+    calldata_page: u32,
+    calldata_length: u32,
+) -> PrimitiveValue {
     let fat_pointer = FatPointer {
         offset: 0,
         memory_page: calldata_page,
@@ -66,5 +72,8 @@ pub(crate) fn form_initial_calldata_ptr(calldata_page: u32, calldata_length: u32
         length: calldata_length,
     };
 
-    PrimitiveValue { value: fat_pointer.to_u256(), is_pointer: true }
+    PrimitiveValue {
+        value: fat_pointer.to_u256(),
+        is_pointer: true,
+    }
 }
