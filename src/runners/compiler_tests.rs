@@ -430,7 +430,7 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
     HashMap<U256, Assembly>,
 ) {
     use zk_evm::contract_bytecode_to_words;
-    use zk_evm::utils::bytecode_to_code_hash;
+    use zk_evm::utils::bytecode_to_code_hash_for_mode;
     // fill the decommitter
 
     let mut factory_deps: HashMap<U256, Vec<U256>> = HashMap::new();
@@ -441,7 +441,7 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
             .clone()
             .compile_to_bytecode_for_mode::<N, E>()
             .expect("must compile an assembly");
-        let bytecode_hash = bytecode_to_code_hash(&bytecode).unwrap();
+        let bytecode_hash = bytecode_to_code_hash_for_mode::<N, E>(&bytecode).unwrap();
         let address_as_u256 = U256::from_big_endian(&address.as_bytes());
         let bytecode_hash_as_u256 = U256::from_big_endian(&bytecode_hash);
 
