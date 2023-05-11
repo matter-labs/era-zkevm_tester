@@ -1,6 +1,5 @@
 use crate::U256;
 use std::collections::HashMap;
-use zk_evm::abstractions::MEMORY_CELLS_OTHER_PAGES;
 
 #[derive(Debug)]
 pub struct SimpleHashmapMemory {
@@ -22,7 +21,6 @@ impl SimpleHashmapMemory {
         for (page, values) in elements.into_iter() {
             assert!(!self.inner.contains_key(&page));
             let len = values.len();
-            assert!(len <= MEMORY_CELLS_OTHER_PAGES);
             let mut inner_map = HashMap::with_capacity(len);
             for (index, value) in values.into_iter().enumerate() {
                 let value = PrimitiveValue::from_value(value);
