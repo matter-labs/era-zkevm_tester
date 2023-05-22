@@ -214,8 +214,6 @@ pub(crate) fn dump_memory_page_by_offset_and_length(
     offset: usize,
     length: usize,
 ) -> Vec<u8> {
-    assert!(offset < (1u32 << 24) as usize);
-    assert!(length < (1u32 << 24) as usize);
     let mut dump = Vec::with_capacity(length);
     if length == 0 {
         return dump;
