@@ -10,7 +10,6 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::atomic::AtomicU64;
 use zk_evm::block_properties::*;
-use zk_evm::precompiles::DefaultPrecompilesProcessor;
 use zk_evm::reference_impls::decommitter::SimpleDecommitter;
 use zk_evm::reference_impls::event_sink::{EventMessage, InMemoryEventSink};
 use zk_evm::testing::storage::InMemoryStorage;
@@ -23,6 +22,7 @@ use zk_evm::zkevm_opcode_defs::definitions::ret::RET_IMPLICIT_RETURNDATA_PARAMS_
 use zk_evm::zkevm_opcode_defs::system_params::DEPLOYER_SYSTEM_CONTRACT_ADDRESS;
 use zk_evm::zkevm_opcode_defs::FatPointer;
 use zk_evm::{aux_structures::*, GenericNoopTracer};
+use zk_evm_abstractions::precompiles::DefaultPrecompilesProcessor;
 use zkevm_assembly::Assembly;
 
 use sha2::{Digest, Sha256};

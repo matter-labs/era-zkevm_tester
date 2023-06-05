@@ -9,6 +9,7 @@ resolver = "2"
 
 [dependencies]
 zk_evm = { git = "https://github.com/matter-labs/zk_evm", branch = "v1.4.0" }
+zk_evm_abstractions = { git = "https://github.com/matter-labs/zk_evm_abstractions.git" }
 zkevm-assembly = { git = "https://github.com/matter-labs/zkEVM-assembly", branch = "v1.3.2" }
 
 # zk_evm = {path = "../zk_evm"}
