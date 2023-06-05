@@ -1,7 +1,6 @@
 use super::*;
 
 use std::collections::{HashMap, HashSet};
-use std::ops::Add;
 
 use serde::{Deserialize, Serialize};
 use zk_evm::zkevm_opcode_defs::decoding::{AllowedPcOrImm, EncodingModeProduction, VmEncodingMode};
@@ -76,13 +75,12 @@ pub struct VmTrace {
 
 use crate::default_environment::*;
 use crate::runners::compiler_tests::calldata_to_aligned_data;
-use zk_evm::{bytecode_to_code_hash, testing::*};
 
 pub fn run_text_assembly_full_trace(
     assembly: String,
     calldata: Vec<u8>,
     num_cycles: usize,
-) -> VmTrace {
+) -> anyhow::Result<VmTrace> {
     let mut vm_assembly =
         Assembly::try_from(assembly.clone()).expect("must get a valid assembly as the input");
 
@@ -144,7 +142,7 @@ pub fn run_text_assembly_full_trace(
         .insert(Address::default(), empty_callstack_dummy_debug_info);
 
     for _ in 0..num_cycles {
-        vm.cycle(&mut tracer);
+        vm.cycle(&mut tracer)?;
     }
 
     let VmDebugTracer {
@@ -159,7 +157,7 @@ pub fn run_text_assembly_full_trace(
 
     let full_trace = VmTrace { steps, sources };
 
-    full_trace
+    Ok(full_trace)
 }
 
 fn error_flags_into_description(flags: &ErrorFlags) -> Vec<String> {

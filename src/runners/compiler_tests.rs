@@ -434,13 +434,12 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
     let mut factory_deps: HashMap<U256, Vec<U256>> = HashMap::new();
     let mut reverse_lookup_for_assembly = HashMap::new();
 
-    for (address, assembly) in contracts.iter() {
+    for (_address, assembly) in contracts.iter() {
         let bytecode = assembly
             .clone()
             .compile_to_bytecode_for_mode::<N, E>()
             .expect("must compile an assembly");
         let bytecode_hash = bytecode_to_code_hash_for_mode::<N, E>(&bytecode).unwrap();
-        let address_as_u256 = U256::from_big_endian(&address.as_bytes());
         let bytecode_hash_as_u256 = U256::from_big_endian(&bytecode_hash);
 
         reverse_lookup_for_assembly.insert(bytecode_hash_as_u256, assembly.clone());
@@ -751,7 +750,7 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
             vm.witness_tracer.is_dummy = true;
             let mut tracer = GenericNoopTracer::new();
             for _ in 0..cycles_limit {
-                vm.cycle(&mut tracer);
+                vm.cycle(&mut tracer)?;
                 cycles_used += 1;
 
                 // early return
@@ -769,7 +768,7 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
 
             for _ in 0..cycles_limit {
                 vm.witness_tracer.queries.truncate(0);
-                vm.cycle(&mut tracer);
+                vm.cycle(&mut tracer)?;
                 cycles_used += 1;
 
                 // manually replace all memory interactions
@@ -858,7 +857,7 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
                 _marker: std::marker::PhantomData,
             };
             for _ in 0..cycles_limit {
-                vm.cycle(&mut tracer);
+                vm.cycle(&mut tracer)?;
                 cycles_used += 1;
 
                 // early return

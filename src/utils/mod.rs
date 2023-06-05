@@ -34,10 +34,7 @@ impl<T: Clone + 'static, const N: usize> FixedLengthIterator<'static, T, N>
 {
 }
 
-use zk_evm::{
-    vm_state::PrimitiveValue,
-    zkevm_opcode_defs::{fat_pointer, FatPointer},
-};
+use zk_evm::{vm_state::PrimitiveValue, zkevm_opcode_defs::FatPointer};
 
 use crate::U256;
 impl IntoFixedLengthByteIterator<32> for U256 {
