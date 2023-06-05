@@ -967,6 +967,8 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
 
     let serialized_events = serde_json::to_string_pretty(&compiler_tests_events).unwrap();
 
+    let did_call_or_ret_recently = local_state.previous_code_memory_page.0 != local_state.callstack.get_current_stack().code_page.0;
+
     Ok(VmSnapshot {
         registers: local_state.registers,
         flags: local_state.flags,
@@ -974,7 +976,7 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
         memory_page_counter: local_state.memory_page_counter,
         tx_number_in_block: local_state.tx_number_in_block,
         previous_super_pc: local_state.previous_super_pc.as_u64() as u32,
-        did_call_or_ret_recently: local_state.did_call_or_ret_recently,
+        did_call_or_ret_recently: did_call_or_ret_recently,
         calldata_area_dump: calldata_mem,
         returndata_area_dump: returndata_mem,
         execution_has_ended,
