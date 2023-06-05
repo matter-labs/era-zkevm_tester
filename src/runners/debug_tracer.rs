@@ -6,6 +6,7 @@ use zk_evm::{
     zkevm_opcode_defs::decoding::{AllowedPcOrImm, EncodingModeProduction, VmEncodingMode},
 };
 use zkevm_assembly::Assembly;
+use zk_evm::tracing::*;
 
 use crate::runners::compiler_tests::{get_tracing_mode, VmTracingOptions};
 

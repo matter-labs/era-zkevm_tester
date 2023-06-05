@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use zk_evm::zkevm_opcode_defs::decoding::{AllowedPcOrImm, EncodingModeProduction, VmEncodingMode};
 use zk_evm::zkevm_opcode_defs::{FatPointer, Opcode, REGISTERS_COUNT};
+use zk_evm::tracing::*;
 
 use crate::runners::compiler_tests::VmTracingOptions;
 
@@ -247,9 +248,8 @@ impl<const N: usize, E: VmEncodingMode<N>> VmDebugTracer<N, E> {
 }
 
 use crate::runners::hashmap_based_memory::SimpleHashmapMemory;
-use zk_evm::abstractions::*;
 
-impl<const N: usize, E: VmEncodingMode<N>> zk_evm::abstractions::Tracer<N, E>
+impl<const N: usize, E: VmEncodingMode<N>> zk_evm::tracing::Tracer<N, E>
     for VmDebugTracer<N, E>
 {
     const CALL_BEFORE_DECODING: bool = false;
@@ -814,7 +814,7 @@ pub mod test {
         input[31] = 1;
         input[63] = 2;
 
-        let trace = run_text_assembly_full_trace(SIMPLE_ASSEMBLY.to_owned(), input, 1000);
+        let trace = run_text_assembly_full_trace(SIMPLE_ASSEMBLY.to_owned(), input, 1000).unwrap();
 
         let _ = std::fs::remove_file("tmp.json");
         let mut file = std::fs::File::create("tmp.json").unwrap();
