@@ -3,9 +3,9 @@ use super::*;
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
+use zk_evm::tracing::*;
 use zk_evm::zkevm_opcode_defs::decoding::{AllowedPcOrImm, EncodingModeProduction, VmEncodingMode};
 use zk_evm::zkevm_opcode_defs::{FatPointer, Opcode, REGISTERS_COUNT};
-use zk_evm::tracing::*;
 
 use crate::runners::compiler_tests::VmTracingOptions;
 
@@ -249,9 +249,7 @@ impl<const N: usize, E: VmEncodingMode<N>> VmDebugTracer<N, E> {
 
 use crate::runners::hashmap_based_memory::SimpleHashmapMemory;
 
-impl<const N: usize, E: VmEncodingMode<N>> zk_evm::tracing::Tracer<N, E>
-    for VmDebugTracer<N, E>
-{
+impl<const N: usize, E: VmEncodingMode<N>> zk_evm::tracing::Tracer<N, E> for VmDebugTracer<N, E> {
     const CALL_BEFORE_DECODING: bool = false;
     const CALL_AFTER_DECODING: bool = true;
     const CALL_BEFORE_EXECUTION: bool = true;
@@ -694,24 +692,15 @@ pub(crate) fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_tex
 
     let VmSnapshot {
         registers,
-        
-        
-        
-        
-        
-        
-        
-        
+
         execution_has_ended,
-        
-        
+
         storage,
-        
+
         execution_result,
         returndata_bytes,
         events,
-        
-        
+
         serialized_events,
         ..
     } = snapshot;
@@ -759,24 +748,14 @@ pub(crate) fn run_inner_with_context(
 
     let VmSnapshot {
         registers,
-        
-        
-        
-        
-        
-        
-        
-        
+
         execution_has_ended,
-        
-        
+
         storage,
-        
+
         execution_result,
         returndata_bytes,
         events,
-        
-        
         ..
     } = snapshot;
     dbg!(execution_has_ended);

@@ -1,5 +1,3 @@
-
-
 pub(crate) fn read_assembly_from_file(path_and_filename: &str) -> String {
     let base_path = std::path::Path::new("./src/tests/simple/external/");
     let full_path = base_path.join(path_and_filename);
