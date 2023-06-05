@@ -1,4 +1,4 @@
-use super::*;
+
 
 pub(crate) fn read_assembly_from_file(path_and_filename: &str) -> String {
     let base_path = std::path::Path::new("./src/tests/simple/external/");

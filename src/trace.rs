@@ -694,24 +694,24 @@ pub(crate) fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_tex
 
     let VmSnapshot {
         registers,
-        flags,
-        timestamp,
-        memory_page_counter,
-        tx_number_in_block,
-        previous_super_pc,
-        did_call_or_ret_recently,
-        calldata_area_dump,
-        returndata_area_dump,
+        
+        
+        
+        
+        
+        
+        
+        
         execution_has_ended,
-        stack_dump,
-        heap_dump,
+        
+        
         storage,
-        deployed_contracts,
+        
         execution_result,
         returndata_bytes,
         events,
-        to_l1_messages,
-        raw_events,
+        
+        
         serialized_events,
         ..
     } = snapshot;
@@ -759,24 +759,24 @@ pub(crate) fn run_inner_with_context(
 
     let VmSnapshot {
         registers,
-        flags,
-        timestamp,
-        memory_page_counter,
-        tx_number_in_block,
-        previous_super_pc,
-        did_call_or_ret_recently,
-        calldata_area_dump,
-        returndata_area_dump,
+        
+        
+        
+        
+        
+        
+        
+        
         execution_has_ended,
-        stack_dump,
-        heap_dump,
+        
+        
         storage,
-        deployed_contracts,
+        
         execution_result,
         returndata_bytes,
         events,
-        to_l1_messages,
-        raw_events,
+        
+        
         ..
     } = snapshot;
     dbg!(execution_has_ended);

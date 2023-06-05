@@ -1,5 +1,4 @@
 use zk_evm::{
-    abstractions::*,
     reference_impls::memory::SimpleMemory,
     u256_to_address_unchecked,
     vm_state::CallStackEntry,
