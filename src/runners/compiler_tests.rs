@@ -330,6 +330,7 @@ pub struct VmSnapshot {
     pub events: Vec<SolidityLikeEvent>,
     pub serialized_events: String,
     pub num_cycles_used: usize,
+    pub num_ergs_used: u32,
 }
 
 #[derive(Debug)]
@@ -498,6 +499,8 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
     vm.local_state.timestamp = INITIAL_TIMESTAMP;
     vm.local_state.memory_page_counter = INITIAL_MEMORY_COUNTER;
     vm.local_state.tx_number_in_block = context.transaction_index as u16;
+    // (50 gwei(l1 gas price) * 17(l1 gas per pubdata byte)) / 250000000 (l2 base fee)
+    vm.local_state.current_ergs_per_pubdata_byte = 3400;
 
     (vm, reverse_lookup_for_assembly)
 }
@@ -991,6 +994,9 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
         events,
         serialized_events,
         num_cycles_used: cycles_used,
+        // All the ergs from the empty frame should be passed into the root(bootloader) and unused ergs will be returned.
+        num_ergs_used: zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS
+            - local_state.callstack.current.ergs_remaining,
     })
 }
 
