@@ -34,7 +34,7 @@ macro_rules! info {
     };
 }
 
-pub fn output_execution_trace(trace: VmTrace, entry_address: Address, test_name: String) {
+pub fn output_execution_trace(trace: VmTrace, _entry_address: Address, test_name: String) {
     let mut file_name = format!("{}_dump.json", test_name);
     if let Ok(env_name) = std::env::var("ZKEVM_TRACE_OUTPUT_FILE") {
         file_name = env_name;

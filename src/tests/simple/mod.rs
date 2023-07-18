@@ -1,13 +1,9 @@
-use super::*;
-
 mod add;
 mod debug;
 mod external;
 mod ret;
 mod uma;
 
-use crate::runners::compiler_tests::VmLaunchOption;
-use crate::runners::compiler_tests::VmTracingOptions;
 use std::collections::HashMap;
 use zk_evm::ethereum_types::U256;
 use zkevm_assembly::Assembly;

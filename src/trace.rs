@@ -1,9 +1,9 @@
 use super::*;
 
 use std::collections::{HashMap, HashSet};
-use std::ops::Add;
 
 use serde::{Deserialize, Serialize};
+use zk_evm::tracing::*;
 use zk_evm::zkevm_opcode_defs::decoding::{AllowedPcOrImm, EncodingModeProduction, VmEncodingMode};
 use zk_evm::zkevm_opcode_defs::{FatPointer, Opcode, REGISTERS_COUNT};
 
@@ -76,13 +76,12 @@ pub struct VmTrace {
 
 use crate::default_environment::*;
 use crate::runners::compiler_tests::calldata_to_aligned_data;
-use zk_evm::{bytecode_to_code_hash, testing::*};
 
 pub fn run_text_assembly_full_trace(
     assembly: String,
     calldata: Vec<u8>,
     num_cycles: usize,
-) -> VmTrace {
+) -> anyhow::Result<VmTrace> {
     let mut vm_assembly =
         Assembly::try_from(assembly.clone()).expect("must get a valid assembly as the input");
 
@@ -144,7 +143,7 @@ pub fn run_text_assembly_full_trace(
         .insert(Address::default(), empty_callstack_dummy_debug_info);
 
     for _ in 0..num_cycles {
-        vm.cycle(&mut tracer);
+        vm.cycle(&mut tracer)?;
     }
 
     let VmDebugTracer {
@@ -159,7 +158,7 @@ pub fn run_text_assembly_full_trace(
 
     let full_trace = VmTrace { steps, sources };
 
-    full_trace
+    Ok(full_trace)
 }
 
 fn error_flags_into_description(flags: &ErrorFlags) -> Vec<String> {
@@ -249,11 +248,8 @@ impl<const N: usize, E: VmEncodingMode<N>> VmDebugTracer<N, E> {
 }
 
 use crate::runners::hashmap_based_memory::SimpleHashmapMemory;
-use zk_evm::abstractions::*;
 
-impl<const N: usize, E: VmEncodingMode<N>> zk_evm::abstractions::Tracer<N, E>
-    for VmDebugTracer<N, E>
-{
+impl<const N: usize, E: VmEncodingMode<N>> zk_evm::tracing::Tracer<N, E> for VmDebugTracer<N, E> {
     const CALL_BEFORE_DECODING: bool = false;
     const CALL_AFTER_DECODING: bool = true;
     const CALL_BEFORE_EXECUTION: bool = true;
@@ -696,24 +692,15 @@ pub(crate) fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_tex
 
     let VmSnapshot {
         registers,
-        flags,
-        timestamp,
-        memory_page_counter,
-        tx_number_in_block,
-        previous_super_pc,
-        did_call_or_ret_recently,
-        calldata_area_dump,
-        returndata_area_dump,
+
         execution_has_ended,
-        stack_dump,
-        heap_dump,
+
         storage,
-        deployed_contracts,
+
         execution_result,
         returndata_bytes,
         events,
-        to_l1_messages,
-        raw_events,
+
         serialized_events,
         ..
     } = snapshot;
@@ -761,24 +748,14 @@ pub(crate) fn run_inner_with_context(
 
     let VmSnapshot {
         registers,
-        flags,
-        timestamp,
-        memory_page_counter,
-        tx_number_in_block,
-        previous_super_pc,
-        did_call_or_ret_recently,
-        calldata_area_dump,
-        returndata_area_dump,
+
         execution_has_ended,
-        stack_dump,
-        heap_dump,
+
         storage,
-        deployed_contracts,
+
         execution_result,
         returndata_bytes,
         events,
-        to_l1_messages,
-        raw_events,
         ..
     } = snapshot;
     dbg!(execution_has_ended);
@@ -816,7 +793,7 @@ pub mod test {
         input[31] = 1;
         input[63] = 2;
 
-        let trace = run_text_assembly_full_trace(SIMPLE_ASSEMBLY.to_owned(), input, 1000);
+        let trace = run_text_assembly_full_trace(SIMPLE_ASSEMBLY.to_owned(), input, 1000).unwrap();
 
         let _ = std::fs::remove_file("tmp.json");
         let mut file = std::fs::File::create("tmp.json").unwrap();
