@@ -595,7 +595,6 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
             }
         }
     }
-    let all_contracts_mapping = contracts.clone();
 
     let (initial_pc, set_far_call_props, extra_props) = match &vm_launch_option {
         VmLaunchOption::Pc(pc) => (E::PcOrImm::from_u64_clipped(*pc as u64), false, None),
@@ -730,7 +729,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
             use crate::trace::*;
 
             let mut tracer = VmDebugTracer::new_from_entry_point(entry_address, &initial_assembly);
-            tracer.add_known_contracts(&all_contracts_mapping);
+            tracer.add_known_contracts(&contracts);
 
             for _ in 0..cycles_limit {
                 vm.witness_tracer.queries.truncate(0);
@@ -819,7 +818,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
             use crate::runners::debug_tracer::DebugTracerWithAssembly;
             let mut tracer = DebugTracerWithAssembly {
                 current_code_address: entry_address,
-                code_address_to_assembly: all_contracts_mapping,
+                code_address_to_assembly: contracts,
                 _marker: std::marker::PhantomData,
             };
             for _ in 0..cycles_limit {
