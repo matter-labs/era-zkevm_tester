@@ -965,7 +965,8 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
 
     let serialized_events = serde_json::to_string_pretty(&compiler_tests_events).unwrap();
 
-    let did_call_or_ret_recently = local_state.previous_code_memory_page.0 != local_state.callstack.get_current_stack().code_page.0;
+    let did_call_or_ret_recently = local_state.previous_code_memory_page.0
+        != local_state.callstack.get_current_stack().code_page.0;
 
     Ok(VmSnapshot {
         registers: local_state.registers,

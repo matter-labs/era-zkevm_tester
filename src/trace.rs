@@ -2625,6 +2625,11 @@ CPI1_7:
         calldata.extend(r);
         calldata.extend(s);
 
-        run_inner_with_context(&calldata, VmLaunchOption::Default, ECRECOVER_SYSTEM_ASM, ctx);
+        run_inner_with_context(
+            &calldata,
+            VmLaunchOption::Default,
+            ECRECOVER_SYSTEM_ASM,
+            ctx,
+        );
     }
 }
