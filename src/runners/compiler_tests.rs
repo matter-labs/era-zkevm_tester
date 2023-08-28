@@ -146,7 +146,7 @@ impl MemoryArea {
     }
 }
 
-pub fn calldata_to_aligned_data(calldata: &Vec<u8>) -> Vec<U256> {
+pub fn calldata_to_aligned_data(calldata: &[u8]) -> Vec<U256> {
     if calldata.len() == 0 {
         return vec![];
     }
@@ -351,7 +351,7 @@ pub fn default_entry_point_contract_address() -> Address {
 pub fn run_vm(
     test_name: String,
     assembly: Assembly,
-    calldata: Vec<u8>,
+    calldata: &[u8],
     storage: HashMap<StorageKey, H256>,
     context: Option<VmExecutionContext>,
     vm_launch_option: VmLaunchOption,
@@ -556,7 +556,7 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool, const N: usize, E: VmEncoding
 pub fn run_vm_multi_contracts(
     test_name: String,
     contracts: HashMap<Address, Assembly>,
-    calldata: Vec<u8>,
+    calldata: &[u8],
     storage: HashMap<StorageKey, H256>,
     entry_address: Address,
     context: Option<VmExecutionContext>,
@@ -604,7 +604,7 @@ pub fn run_vm_multi_contracts(
 fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     test_name: String,
     contracts: HashMap<Address, Assembly>,
-    calldata: Vec<u8>,
+    calldata: &[u8],
     storage: HashMap<StorageKey, H256>,
     entry_address: Address,
     context: Option<VmExecutionContext>,

@@ -668,7 +668,7 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::tracing::Tracer<N, E> for VmD
 
 use crate::runners::compiler_tests::VmLaunchOption;
 
-pub(crate) fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_text: &str) {
+pub(crate) fn run_inner(calldata: &[u8], options: VmLaunchOption, assembly_text: &str) {
     use crate::runners::compiler_tests::*;
 
     let assembly = Assembly::try_from(assembly_text.to_owned()).unwrap();
@@ -715,7 +715,7 @@ pub(crate) fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_tex
 use crate::runners::compiler_tests::VmExecutionContext;
 
 pub(crate) fn run_inner_with_context(
-    calldata: Vec<u8>,
+    calldata: &[u8],
     options: VmLaunchOption,
     assembly_text: &str,
     context: VmExecutionContext,
@@ -2625,6 +2625,6 @@ CPI1_7:
         calldata.extend(r);
         calldata.extend(s);
 
-        run_inner_with_context(calldata, VmLaunchOption::Default, ECRECOVER_SYSTEM_ASM, ctx);
+        run_inner_with_context(&calldata, VmLaunchOption::Default, ECRECOVER_SYSTEM_ASM, ctx);
     }
 }

@@ -20,7 +20,7 @@ pub(crate) fn run_for_result_only(assembly_text: &str) {
     let snapshot = run_vm(
         "manual".to_owned(),
         assembly.clone(),
-        vec![],
+        &[],
         HashMap::new(),
         None,
         VmLaunchOption::Default,
