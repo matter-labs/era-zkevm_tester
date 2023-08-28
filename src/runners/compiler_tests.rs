@@ -348,7 +348,7 @@ pub fn default_entry_point_contract_address() -> Address {
 /// Used for testing the compiler with a single contract.
 ///
 #[allow(clippy::too_many_arguments)]
-pub async fn run_vm(
+pub fn run_vm(
     test_name: String,
     assembly: Assembly,
     calldata: Vec<u8>,
@@ -374,7 +374,6 @@ pub async fn run_vm(
         known_contracts,
         default_aa_code_hash,
     )
-    .await
 }
 
 pub struct ExtendedTestingTools<const B: bool> {
@@ -554,7 +553,7 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool, const N: usize, E: VmEncoding
 /// Used for testing the compiler with multiple contracts.
 ///
 #[allow(clippy::too_many_arguments)]
-pub async fn run_vm_multi_contracts(
+pub fn run_vm_multi_contracts(
     test_name: String,
     contracts: HashMap<Address, Assembly>,
     calldata: Vec<u8>,
@@ -582,23 +581,19 @@ pub async fn run_vm_multi_contracts(
                 known_contracts,
                 default_aa_code_hash,
             )
-            .await
         }
-        RunningVmEncodingMode::Testing => {
-            run_vm_multi_contracts_inner::<16, EncodingModeTesting>(
-                test_name,
-                contracts,
-                calldata,
-                storage,
-                entry_address,
-                context,
-                vm_launch_option,
-                cycles_limit,
-                known_contracts,
-                default_aa_code_hash,
-            )
-            .await
-        }
+        RunningVmEncodingMode::Testing => run_vm_multi_contracts_inner::<16, EncodingModeTesting>(
+            test_name,
+            contracts,
+            calldata,
+            storage,
+            entry_address,
+            context,
+            vm_launch_option,
+            cycles_limit,
+            known_contracts,
+            default_aa_code_hash,
+        ),
     }
 }
 
@@ -606,7 +601,7 @@ pub async fn run_vm_multi_contracts(
 /// Used for testing the compiler with multiple contracts.
 ///
 #[allow(clippy::too_many_arguments)]
-async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
+fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     test_name: String,
     contracts: HashMap<Address, Assembly>,
     calldata: Vec<u8>,

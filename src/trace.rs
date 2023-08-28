@@ -671,13 +671,12 @@ use crate::runners::compiler_tests::VmLaunchOption;
 pub(crate) fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_text: &str) {
     use crate::runners::compiler_tests::*;
 
-    use futures::executor::block_on;
     let assembly = Assembly::try_from(assembly_text.to_owned()).unwrap();
     let bytecode = assembly.clone().compile_to_bytecode().unwrap();
     let hash = U256::from(zk_evm::utils::bytecode_to_code_hash(&bytecode).unwrap());
     let mut known_contracts = HashMap::new();
     known_contracts.insert(hash, assembly.clone());
-    let snapshot = block_on(run_vm(
+    let snapshot = run_vm(
         "manual".to_owned(),
         assembly.clone(),
         calldata,
@@ -687,7 +686,7 @@ pub(crate) fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_tex
         u16::MAX as usize,
         known_contracts,
         U256::zero(),
-    ))
+    )
     .unwrap();
 
     let VmSnapshot {
@@ -723,7 +722,6 @@ pub(crate) fn run_inner_with_context(
 ) {
     use crate::runners::compiler_tests::*;
 
-    use futures::executor::block_on;
     let assembly = Assembly::try_from(assembly_text.to_owned()).unwrap();
     let bytecode = assembly.clone().compile_to_bytecode().unwrap();
     let hash = U256::from(zk_evm::utils::bytecode_to_code_hash(&bytecode).unwrap());
@@ -732,7 +730,7 @@ pub(crate) fn run_inner_with_context(
     let entry_address = context.this_address;
     let mut contracts: HashMap<Address, Assembly> = HashMap::new();
     contracts.insert(entry_address, assembly.clone());
-    let snapshot = block_on(run_vm_multi_contracts(
+    let snapshot = run_vm_multi_contracts(
         "manual".to_owned(),
         contracts,
         calldata,
@@ -743,7 +741,7 @@ pub(crate) fn run_inner_with_context(
         u16::MAX as usize,
         known_contracts,
         U256::zero(),
-    ))
+    )
     .unwrap();
 
     let VmSnapshot {
