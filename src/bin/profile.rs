@@ -1,4 +1,4 @@
-use zkevm_tester::trace::test::run_ecrecover_system_contract;
+use zkevm_tester::trace::run_ecrecover_system_contract;
 
 fn main() {
     run_ecrecover_system_contract();

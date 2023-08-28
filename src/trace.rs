@@ -765,7 +765,177 @@ pub(crate) fn run_inner_with_context(
     dbg!(storage);
 }
 
-#[cfg(any(test, feature = "external_testing"))]
+#[cfg(any(test, feature="external_testing"))]
+pub fn run_ecrecover_system_contract() {
+    runners::compiler_tests::set_tracing_mode(VmTracingOptions::None);
+    let mut ctx = VmExecutionContext::default();
+    ctx.msg_sender = Address::from_low_u64_be(0x1_000_000);
+    ctx.this_address = Address::from_low_u64_be(0x12);
+    dbg!(ctx.msg_sender);
+    dbg!(ctx.this_address);
+    let hash = hex::decode("1da44b586eb0729ff70a73c326926f6ed5a25f5b056e7f47fbc6e58d86871655")
+        .unwrap();
+    let recovery_byte = 0x1c;
+    let r = hex::decode("b91467e570a6466aa9e9876cbcd013baba02900b8979d43fe208a4a4f339f5fd")
+        .unwrap();
+    let s = hex::decode("6007e74cd82e037b800186422fc2da167c747ef045e5d18a5f5d4300f8e1a029")
+        .unwrap();
+    let mut calldata = hash;
+    calldata.extend(std::iter::repeat(0x00).take(31));
+    calldata.push(recovery_byte);
+    calldata.extend(r);
+    calldata.extend(s);
+
+    run_inner_with_context(
+        &calldata,
+        VmLaunchOption::Default,
+        ECRECOVER_SYSTEM_ASM,
+        ctx,
+    );
+}
+
+const ECRECOVER_SYSTEM_ASM: &'static str = r#"
+
+.text
+.file	"Test_268"
+.globl	__entry
+__entry:
+.func_begin0:
+add	@CPI0_0[0], r0, r4
+uma.heap_write	r4, r1, r0
+add	@CPI0_1[0], r0, r1
+uma.heap_write	r1, r2, r0
+and	1, r3, r1
+add	1, r0, r2
+sub!	r1, r2, r1
+jump.ne	@.BB0_2
+add	128, r0, r1
+add	64, r0, r2
+uma.heap_write	r2, r1, r0
+ret.ok.to_label	r1, @DEFAULT_FAR_RETURN
+.BB0_2:
+near_call	r0, @__selector, @DEFAULT_UNWIND
+.func_end0:
+
+__selector:
+.func_begin1:
+add	128, r0, r1
+add	64, r0, r2
+uma.heap_write	r2, r1, r0
+add	@CPI1_0[0], r0, r2
+context.code_source	r3
+and	r3, r2, r2
+context.this	r3
+sub!	r2, r3, r2
+jump.eq	@.BB1_2
+add	0, r0, r1
+ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
+.BB1_2:
+add	@CPI1_1[0], r0, r2
+uma.heap_read	r2, r0, r2
+sub!	r2, r1, r2
+jump.eq	@.BB1_4
+add	0, r0, r1
+ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
+.BB1_4:
+add	@CPI1_2[0], r0, r2
+uma.heap_read	r2, r0, r5
+add	96, r5, r2
+uma.calldata_read	r2, r0, r3
+add	64, r5, r2
+uma.calldata_read	r2, r0, r4
+add	32, r5, r2
+uma.calldata_read	r2, r0, r7
+add	1, r0, r2
+sub!	r7, r2, r6
+jump.le	@.BB1_7
+add	@CPI1_3[0], r0, r6
+add	r7, r6, r7
+sub!	r7, r2, r6
+jump.le	@.BB1_7
+add	0, r0, r1
+ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
+.BB1_7:
+add	0, r0, r6
+sub!	r3, r6, r8
+jump.ne	@.BB1_9
+add	0, r0, r1
+ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
+.BB1_9:
+sub!	r4, r6, r8
+jump.ne	@.BB1_11
+add	0, r0, r1
+ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
+.BB1_11:
+add	@CPI1_4[0], r0, r8
+sub!	r3, r8, r8
+jump.le	@.BB1_13
+add	0, r0, r1
+ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
+.BB1_13:
+add	@CPI1_5[0], r0, r8
+sub!	r4, r8, r8
+jump.le	@.BB1_15
+add	0, r0, r1
+ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
+.BB1_15:
+uma.calldata_read	r5, r0, r5
+uma.heap_write	r1, r5, r0
+add	160, r0, r1
+uma.heap_write	r1, r7, r0
+add	192, r0, r1
+uma.heap_write	r1, r4, r0
+add	224, r0, r1
+uma.heap_write	r1, r3, r0
+add	3000, r0, r1
+context.ergs_left	r3
+sub!	r3, r1, r3
+jump.ge	@.BB1_17
+add	0, r0, r1
+ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
+.BB1_17:
+add	@CPI1_6[0], r0, r3
+precompile	r3, r1, r1
+sub!	r1, r6, r1
+jump.ne	@.BB1_19
+add	0, r0, r1
+ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
+.BB1_19:
+uma.heap_read	r6, r0, r1
+sub!	r1, r2, r1
+jump.eq	@.BB1_21
+add	0, r0, r1
+ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
+.BB1_21:
+add	@CPI1_7[0], r0, r1
+ret.ok.to_label	r1, @DEFAULT_FAR_RETURN
+.func_end1:
+
+.note.GNU-stack
+.rodata
+CPI0_0:
+.cell 16777184
+CPI0_1:
+.cell 16777152
+CPI1_0:
+.cell 1461501637330902918203684832716283019655932542975
+CPI1_1:
+.cell 16777152
+CPI1_2:
+.cell 16777184
+CPI1_3:
+.cell -27
+CPI1_4:
+.cell 57896044618658097711785492504343953926418782139537452191302581570759080747168
+CPI1_5:
+.cell -432420386565659656852420866394968145600
+CPI1_6:
+.cell 79228162514264337610723819524
+CPI1_7:
+.cell 137438953504
+"#;
+
+#[cfg(test)]
 pub mod test {
     use crate::runners::compiler_tests::{set_tracing_mode, VmExecutionContext};
 
@@ -2459,178 +2629,9 @@ CPI1_11:
         );
     }
 
-    const ECRECOVER_SYSTEM_ASM: &'static str = r#"
-
-	.text
-	.file	"Test_268"
-	.globl	__entry
-__entry:
-.func_begin0:
-	add	@CPI0_0[0], r0, r4
-	uma.heap_write	r4, r1, r0
-	add	@CPI0_1[0], r0, r1
-	uma.heap_write	r1, r2, r0
-	and	1, r3, r1
-	add	1, r0, r2
-	sub!	r1, r2, r1
-	jump.ne	@.BB0_2
-	add	128, r0, r1
-	add	64, r0, r2
-	uma.heap_write	r2, r1, r0
-	ret.ok.to_label	r1, @DEFAULT_FAR_RETURN
-.BB0_2:
-	near_call	r0, @__selector, @DEFAULT_UNWIND
-.func_end0:
-
-__selector:
-.func_begin1:
-	add	128, r0, r1
-	add	64, r0, r2
-	uma.heap_write	r2, r1, r0
-	add	@CPI1_0[0], r0, r2
-	context.code_source	r3
-	and	r3, r2, r2
-	context.this	r3
-	sub!	r2, r3, r2
-	jump.eq	@.BB1_2
-	add	0, r0, r1
-	ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
-.BB1_2:
-	add	@CPI1_1[0], r0, r2
-	uma.heap_read	r2, r0, r2
-	sub!	r2, r1, r2
-	jump.eq	@.BB1_4
-	add	0, r0, r1
-	ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
-.BB1_4:
-	add	@CPI1_2[0], r0, r2
-	uma.heap_read	r2, r0, r5
-	add	96, r5, r2
-	uma.calldata_read	r2, r0, r3
-	add	64, r5, r2
-	uma.calldata_read	r2, r0, r4
-	add	32, r5, r2
-	uma.calldata_read	r2, r0, r7
-	add	1, r0, r2
-	sub!	r7, r2, r6
-	jump.le	@.BB1_7
-	add	@CPI1_3[0], r0, r6
-	add	r7, r6, r7
-	sub!	r7, r2, r6
-	jump.le	@.BB1_7
-	add	0, r0, r1
-	ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
-.BB1_7:
-	add	0, r0, r6
-	sub!	r3, r6, r8
-	jump.ne	@.BB1_9
-	add	0, r0, r1
-	ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
-.BB1_9:
-	sub!	r4, r6, r8
-	jump.ne	@.BB1_11
-	add	0, r0, r1
-	ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
-.BB1_11:
-	add	@CPI1_4[0], r0, r8
-	sub!	r3, r8, r8
-	jump.le	@.BB1_13
-	add	0, r0, r1
-	ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
-.BB1_13:
-	add	@CPI1_5[0], r0, r8
-	sub!	r4, r8, r8
-	jump.le	@.BB1_15
-	add	0, r0, r1
-	ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
-.BB1_15:
-	uma.calldata_read	r5, r0, r5
-	uma.heap_write	r1, r5, r0
-	add	160, r0, r1
-	uma.heap_write	r1, r7, r0
-	add	192, r0, r1
-	uma.heap_write	r1, r4, r0
-	add	224, r0, r1
-	uma.heap_write	r1, r3, r0
-	add	3000, r0, r1
-	context.ergs_left	r3
-	sub!	r3, r1, r3
-	jump.ge	@.BB1_17
-	add	0, r0, r1
-	ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
-.BB1_17:
-	add	@CPI1_6[0], r0, r3
-	precompile	r3, r1, r1
-	sub!	r1, r6, r1
-	jump.ne	@.BB1_19
-	add	0, r0, r1
-	ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
-.BB1_19:
-	uma.heap_read	r6, r0, r1
-	sub!	r1, r2, r1
-	jump.eq	@.BB1_21
-	add	0, r0, r1
-	ret.revert.to_label	r1, @DEFAULT_FAR_REVERT
-.BB1_21:
-	add	@CPI1_7[0], r0, r1
-	ret.ok.to_label	r1, @DEFAULT_FAR_RETURN
-.func_end1:
-
-	.note.GNU-stack
-	.rodata
-CPI0_0:
-	.cell 16777184
-CPI0_1:
-	.cell 16777152
-CPI1_0:
-	.cell 1461501637330902918203684832716283019655932542975
-CPI1_1:
-	.cell 16777152
-CPI1_2:
-	.cell 16777184
-CPI1_3:
-	.cell -27
-CPI1_4:
-	.cell 57896044618658097711785492504343953926418782139537452191302581570759080747168
-CPI1_5:
-	.cell -432420386565659656852420866394968145600
-CPI1_6:
-	.cell 79228162514264337610723819524
-CPI1_7:
-	.cell 137438953504
-    "#;
-
     #[test]
     fn test_run_ecrecover_system_contract() {
         set_tracing_mode(VmTracingOptions::ManualVerbose);
         run_ecrecover_system_contract()
-    }
-
-    pub fn run_ecrecover_system_contract() {
-        set_tracing_mode(VmTracingOptions::None);
-        let mut ctx = VmExecutionContext::default();
-        ctx.msg_sender = Address::from_low_u64_be(0x1_000_000);
-        ctx.this_address = Address::from_low_u64_be(0x12);
-        dbg!(ctx.msg_sender);
-        dbg!(ctx.this_address);
-        let hash = hex::decode("1da44b586eb0729ff70a73c326926f6ed5a25f5b056e7f47fbc6e58d86871655")
-            .unwrap();
-        let recovery_byte = 0x1c;
-        let r = hex::decode("b91467e570a6466aa9e9876cbcd013baba02900b8979d43fe208a4a4f339f5fd")
-            .unwrap();
-        let s = hex::decode("6007e74cd82e037b800186422fc2da167c747ef045e5d18a5f5d4300f8e1a029")
-            .unwrap();
-        let mut calldata = hash;
-        calldata.extend(std::iter::repeat(0x00).take(31));
-        calldata.push(recovery_byte);
-        calldata.extend(r);
-        calldata.extend(s);
-
-        run_inner_with_context(
-            &calldata,
-            VmLaunchOption::Default,
-            ECRECOVER_SYSTEM_ASM,
-            ctx,
-        );
     }
 }
