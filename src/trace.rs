@@ -668,6 +668,7 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::tracing::Tracer<N, E> for VmD
 
 use crate::runners::compiler_tests::VmLaunchOption;
 
+#[cfg(test)]
 pub(crate) fn run_inner(calldata: &[u8], options: VmLaunchOption, assembly_text: &str) {
     use crate::runners::compiler_tests::*;
 

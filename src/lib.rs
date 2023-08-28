@@ -17,4 +17,5 @@ pub mod runners;
 pub mod trace;
 mod utils;
 
+#[cfg(test)]
 mod tests;
