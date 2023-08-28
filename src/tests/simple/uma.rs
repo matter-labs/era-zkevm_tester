@@ -1,8 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::runners::compiler_tests::set_tracing_mode;
-
-    use super::*;
+    use crate::tests::simple::run_for_result_only;
 
     #[test]
     fn uma_trivial_write() {

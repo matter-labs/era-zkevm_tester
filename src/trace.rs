@@ -804,7 +804,7 @@ pub mod test {
     #[test]
     fn test_manually() {
         run_inner(
-            hex::decode("5a8ac02d").unwrap(),
+            &hex::decode("5a8ac02d").unwrap(),
             VmLaunchOption::Default,
             SIMPLE_ASSEMBLY,
         );
@@ -813,7 +813,7 @@ pub mod test {
     #[test]
     fn test_constructor_manually() {
         run_inner(
-            hex::decode("5a8ac02d").unwrap(),
+            &hex::decode("5a8ac02d").unwrap(),
             VmLaunchOption::Constructor,
             SIMPLE_ASSEMBLY,
         );
@@ -980,7 +980,7 @@ __selector:
     #[test]
     fn run_for_events() {
         run_inner(
-            hex::decode("29e99f07000000000000000000000000000000000000000000000000000000000000002a")
+            &hex::decode("29e99f07000000000000000000000000000000000000000000000000000000000000002a")
                 .unwrap(),
             VmLaunchOption::Default,
             WITH_EVENTS_ASSEMBLY,
@@ -1011,7 +1011,7 @@ __entry:
     #[test]
     fn run_for_simple_storage_touch() {
         run_inner(
-            hex::decode("").unwrap(),
+            &hex::decode("").unwrap(),
             VmLaunchOption::Default,
             SIMPLE_TOUCH_STORAGE,
         );
@@ -1041,7 +1041,7 @@ __entry:
     #[test]
     fn run_for_simple_storage_with_rollback() {
         run_inner(
-            hex::decode("").unwrap(),
+            &hex::decode("").unwrap(),
             VmLaunchOption::Default,
             SIMPLE_STORAGE_WITH_ROLLBACK,
         );
@@ -1077,7 +1077,7 @@ __entry:
     #[test]
     fn run_for_simple_storage_with_rollback_in_inner_frame() {
         run_inner(
-            hex::decode("").unwrap(),
+            &hex::decode("").unwrap(),
             VmLaunchOption::Default,
             SIMPLE_STORAGE_WITH_ROLLBACK_OF_CHILD,
         );
@@ -1414,7 +1414,7 @@ __entry:
     #[test]
     fn run_parse_manual_default_unwind() {
         run_inner(
-            hex::decode("").unwrap(),
+            &hex::decode("").unwrap(),
             VmLaunchOption::Default,
             MANUAL_DEFAULT_UNWIND_LABEL_ACCESS,
         );
@@ -2060,7 +2060,7 @@ __entry:
     fn run_returndata_on_revert() {
         set_tracing_mode(VmTracingOptions::ManualVerbose);
         run_inner(
-            hex::decode("bb0fa1300000000000000000000000000000000000000000000000000000000000000001")
+            &hex::decode("bb0fa1300000000000000000000000000000000000000000000000000000000000000001")
                 .unwrap(),
             VmLaunchOption::Default,
             ENSURE_PROPER_RETURN_ON_REVERT,
@@ -2258,7 +2258,7 @@ CPI1_11:
         dbg!(ctx.msg_sender);
         dbg!(ctx.this_address);
         run_inner_with_context(
-            hex::decode("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap(),
+            &hex::decode("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap(),
             // hex::decode("00ff").unwrap(), 
             VmLaunchOption::Default,
             KECCAK256_SYSTEM_ASM,
@@ -2450,7 +2450,7 @@ CPI1_11:
         dbg!(ctx.msg_sender);
         dbg!(ctx.this_address);
         run_inner_with_context(
-            hex::decode("00").unwrap(),
+            &hex::decode("00").unwrap(),
             // hex::decode("00ff").unwrap(),
             VmLaunchOption::Default,
             SHA256_SYSTEM_ASM,

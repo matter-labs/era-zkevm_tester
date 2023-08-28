@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::tests::simple::run_for_result_only;
 
     #[test]
     fn test_ret_revert() {
