@@ -21,7 +21,7 @@ impl std::fmt::Debug for SolidityLikeEvent {
                     "[{}]",
                     self.topics
                         .iter()
-                        .map(|el| format!("0x{}", hex::encode(&el)))
+                        .map(|el| format!("0x{}", hex::encode(el)))
                         .collect::<Vec<_>>()
                         .join(",")
                 ),
@@ -150,18 +150,18 @@ pub struct Event {
     pub values: Vec<String>,
 }
 
-impl Into<Event> for SolidityLikeEvent {
-    fn into(self) -> Event {
+impl From<SolidityLikeEvent> for Event {
+    fn from(solidity: SolidityLikeEvent) -> Event {
         // topics are formatted as hex with 0x
-        let topics = self
+        let topics = solidity
             .topics
             .into_iter()
-            .map(|el| format!("0x{}", hex::encode(&el)))
+            .map(|el| format!("0x{}", hex::encode(el)))
             .collect();
         // values are formatted as integers
 
         let mut values = vec![];
-        let mut it = self.data.chunks_exact(32);
+        let mut it = solidity.data.chunks_exact(32);
         use crate::U256;
         for el in &mut it {
             let as_integer = U256::from_big_endian(el);

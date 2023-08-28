@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::runners::compiler_tests::{set_tracing_mode, VmTracingOptions, VmLaunchOption};
+    use crate::runners::compiler_tests::{set_tracing_mode, VmLaunchOption, VmTracingOptions};
     use crate::trace::run_inner;
 
     #[test]
@@ -855,8 +855,10 @@ CPI4_4:
 
         set_tracing_mode(VmTracingOptions::ManualVerbose);
         run_inner(
-            &hex::decode("d12ad9060000000000000000000000000000000000000000000000000000000000000001")
-                .unwrap(),
+            &hex::decode(
+                "d12ad9060000000000000000000000000000000000000000000000000000000000000001",
+            )
+            .unwrap(),
             VmLaunchOption::Default,
             assembly,
         );

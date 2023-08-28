@@ -116,11 +116,7 @@ impl<const N: usize, E: VmEncodingMode<N>> Tracer<N, E> for DebugTracerWithAssem
                 .get(&(pc.as_u64() as usize))
                 .copied()
             {
-                let l = if line == 0 {
-                    assembly.assembly_code.lines().next().unwrap()
-                } else {
-                    assembly.assembly_code.lines().skip(line).next().unwrap()
-                };
+                let l = assembly.assembly_code.lines().nth(line).unwrap();
 
                 println!("Executing {}", l.trim());
                 // if l.trim().contains("far_call") {
@@ -135,9 +131,6 @@ impl<const N: usize, E: VmEncodingMode<N>> Tracer<N, E> for DebugTracerWithAssem
         _data: AfterDecodingData<N, E>,
         _memory: &Self::SupportedMemory,
     ) {
-        if get_tracing_mode() != VmTracingOptions::ManualVerbose {
-            return;
-        }
     }
     fn before_execution(
         &mut self,

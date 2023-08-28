@@ -10,10 +10,10 @@ pub const ENTRY_POINT_PAGE: u32 =
         INITIAL_BASE_PAGE,
     ))
     .0;
-pub const DEFAULT_CALLER: &'static str = "3000";
-pub const DEFAULT_CALLEE: &'static str = "5000";
-pub const EMPTY_CONTEXT_HEX: &'static str = "0x0000000000000000000000000000000000000000";
-pub const DEFAULT_CALLEE_HEX: &'static str = "0x0000000000000000000000000000000000001388";
+pub const DEFAULT_CALLER: &str = "3000";
+pub const DEFAULT_CALLEE: &str = "5000";
+pub const EMPTY_CONTEXT_HEX: &str = "0x0000000000000000000000000000000000000000";
+pub const DEFAULT_CALLEE_HEX: &str = "0x0000000000000000000000000000000000001388";
 
 pub fn default_callee_address() -> Address {
     let bytes: [u8; 20] = hex::decode(&DEFAULT_CALLEE_HEX[2..])

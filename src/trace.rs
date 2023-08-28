@@ -83,7 +83,7 @@ pub fn run_text_assembly_full_trace(
     num_cycles: usize,
 ) -> anyhow::Result<VmTrace> {
     let mut vm_assembly =
-        Assembly::try_from(assembly.clone()).expect("must get a valid assembly as the input");
+        Assembly::try_from(assembly).expect("must get a valid assembly as the input");
 
     let empty_callstack_dummy_debug_info = ContractSourceDebugInfo {
         assembly_code: "nop r0, r0, r0, r0".to_owned(),
@@ -91,8 +91,10 @@ pub fn run_text_assembly_full_trace(
         active_lines: HashSet::from([0]),
     };
 
-    let mut context = VmExecutionContext::default();
-    context.this_address = default_callee_address();
+    let context = VmExecutionContext {
+        this_address: default_callee_address(),
+        ..Default::default()
+    };
 
     // let debug_info = ContractSourceDebugInfo {
     //     assembly_code: vm_assembly.assembly_code.clone(),
@@ -109,8 +111,8 @@ pub fn run_text_assembly_full_trace(
     let aligned_calldata = calldata_to_aligned_data(&calldata);
 
     tools.memory.populate(vec![
-        (CALLDATA_PAGE, aligned_calldata.clone()),
-        (ENTRY_POINT_PAGE, initial_bytecode_as_memory.clone()),
+        (CALLDATA_PAGE, aligned_calldata),
+        (ENTRY_POINT_PAGE, initial_bytecode_as_memory),
     ]);
 
     let block_properties = create_default_block_properties();
@@ -238,7 +240,7 @@ impl<const N: usize, E: VmEncodingMode<N>> VmDebugTracer<N, E> {
             .extend(other_contracts.clone().into_iter().map(|(k, v)| {
                 let info = ContractSourceDebugInfo {
                     assembly_code: v.assembly_code.clone(),
-                    pc_line_mapping: v.pc_line_mapping.clone(),
+                    pc_line_mapping: v.pc_line_mapping,
                     active_lines: HashSet::new(),
                 };
 
@@ -285,8 +287,8 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::tracing::Tracer<N, E> for VmD
         let contract_address = format!("0x{:x}", current_context.this_address);
         let code_page = current_context.code_page.0;
         let base_memory_page = current_context.base_memory_page.0;
-        self.callstack_info = Some(current_context.clone());
-        drop(current_context);
+        self.callstack_info = Some(*current_context);
+
         if let Some(info) = self.debug_info.get_mut(&code_address) {
             info.active_lines.insert(current_pc.as_u64() as usize);
         }
@@ -301,11 +303,6 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::tracing::Tracer<N, E> for VmD
             .map(|el| format!("0x{:x}", el.value));
         // .map(|el| format!("0x{:064x}", el));
 
-        let error = if let Some(e) = errors.first() {
-            Some(e.clone())
-        } else {
-            None
-        };
         let mut trace_step = VmExecutionStep {
             contract_address,
             registers,
@@ -325,7 +322,7 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::tracing::Tracer<N, E> for VmD
             register_interactions: HashMap::new(),
             memory_interactions: vec![],
             memory_snapshots: vec![],
-            error,
+            error: errors.first().cloned(),
         };
 
         // special case for initial cycle
@@ -340,12 +337,12 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::tracing::Tracer<N, E> for VmD
 
             let initial_calldata = initial_calldata
                 .into_iter()
-                .map(|el| format!("0x{}", hex::encode(&el)))
+                .map(|el| format!("0x{}", hex::encode(el)))
                 .collect();
             let snapshot = MemorySnapshot {
                 memory_type: MemoryType::calldata,
                 page: calldata_page as usize,
-                length: len_words as usize,
+                length: len_words,
                 values: initial_calldata,
             };
 
@@ -360,14 +357,14 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::tracing::Tracer<N, E> for VmD
                 );
 
             let mut fat_ptr = FatPointer::from_u256(state.vm_local_state.registers[0].value);
-            if state.vm_local_state.registers[0].is_pointer == false {
+            if !state.vm_local_state.registers[0].is_pointer {
                 fat_ptr = FatPointer::empty();
             }
             let returndata_len = fat_ptr.length - fat_ptr.offset;
             let initial_returndata = memory.dump_page_content(returndata_page, range);
             let initial_returndata = initial_returndata
                 .into_iter()
-                .map(|el| format!("0x{}", hex::encode(&el)))
+                .map(|el| format!("0x{}", hex::encode(el)))
                 .collect();
 
             let snapshot = MemorySnapshot {
@@ -455,15 +452,13 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::tracing::Tracer<N, E> for VmD
                         .unwrap_or(U256::zero());
 
                     let value = format!("0x{:064x}", value);
-                    let mem_interaction = MemoryInteraction {
+                    MemoryInteraction {
                         memory_type,
                         page,
                         address: index,
                         value,
                         direction: MemoryAccessType::Read,
-                    };
-
-                    mem_interaction
+                    }
                 }
                 // page if page == calldata_page ||
                 // page == returndata_page => {
@@ -592,15 +587,13 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::tracing::Tracer<N, E> for VmD
                         .unwrap_or(U256::zero());
 
                     let value = format!("0x{:064x}", value);
-                    let mem_interaction = MemoryInteraction {
+                    MemoryInteraction {
                         memory_type,
                         page,
                         address: index,
                         value,
                         direction: MemoryAccessType::Write,
-                    };
-
-                    mem_interaction
+                    }
                 }
                 // page if page == calldata_page ||
                 // page == returndata_page => {
@@ -730,7 +723,7 @@ pub(crate) fn run_inner_with_context(
     known_contracts.insert(hash, assembly.clone());
     let entry_address = context.this_address;
     let mut contracts: HashMap<Address, Assembly> = HashMap::new();
-    contracts.insert(entry_address, assembly.clone());
+    contracts.insert(entry_address, assembly);
     let snapshot = run_vm_multi_contracts(
         "manual".to_owned(),
         contracts,
@@ -760,26 +753,28 @@ pub(crate) fn run_inner_with_context(
     dbg!(execution_has_ended);
     dbg!(execution_result);
     dbg!(registers);
-    dbg!(hex::encode(&returndata_bytes));
+    dbg!(hex::encode(returndata_bytes));
     dbg!(events);
     dbg!(storage);
 }
 
-#[cfg(any(test, feature="external_testing"))]
+#[cfg(any(test, feature = "external_testing"))]
 pub fn run_ecrecover_system_contract() {
     runners::compiler_tests::set_tracing_mode(VmTracingOptions::None);
-    let mut ctx = VmExecutionContext::default();
-    ctx.msg_sender = Address::from_low_u64_be(0x1_000_000);
-    ctx.this_address = Address::from_low_u64_be(0x12);
+    let ctx = VmExecutionContext {
+        msg_sender: Address::from_low_u64_be(0x1_000_000),
+        this_address: Address::from_low_u64_be(0x12),
+        ..Default::default()
+    };
     dbg!(ctx.msg_sender);
     dbg!(ctx.this_address);
-    let hash = hex::decode("1da44b586eb0729ff70a73c326926f6ed5a25f5b056e7f47fbc6e58d86871655")
-        .unwrap();
+    let hash =
+        hex::decode("1da44b586eb0729ff70a73c326926f6ed5a25f5b056e7f47fbc6e58d86871655").unwrap();
     let recovery_byte = 0x1c;
-    let r = hex::decode("b91467e570a6466aa9e9876cbcd013baba02900b8979d43fe208a4a4f339f5fd")
-        .unwrap();
-    let s = hex::decode("6007e74cd82e037b800186422fc2da167c747ef045e5d18a5f5d4300f8e1a029")
-        .unwrap();
+    let r =
+        hex::decode("b91467e570a6466aa9e9876cbcd013baba02900b8979d43fe208a4a4f339f5fd").unwrap();
+    let s =
+        hex::decode("6007e74cd82e037b800186422fc2da167c747ef045e5d18a5f5d4300f8e1a029").unwrap();
     let mut calldata = hash;
     calldata.extend(std::iter::repeat(0x00).take(31));
     calldata.push(recovery_byte);
@@ -794,7 +789,7 @@ pub fn run_ecrecover_system_contract() {
     );
 }
 
-const ECRECOVER_SYSTEM_ASM: &'static str = r#"
+const ECRECOVER_SYSTEM_ASM: &str = r#"
 
 .text
 .file	"Test_268"
@@ -941,7 +936,7 @@ pub mod test {
 
     use super::*;
 
-    const SIMPLE_ASSEMBLY: &'static str = r#"
+    const SIMPLE_ASSEMBLY: &str = r#"
     .text
     main:
         context.this r2
@@ -990,7 +985,7 @@ pub mod test {
         );
     }
 
-    const WITH_EVENTS_ASSEMBLY: &'static str = r#"
+    const WITH_EVENTS_ASSEMBLY: &str = r#"
     .text
 	.file	"Test_41"
 	.rodata.cst32
@@ -1151,14 +1146,16 @@ __selector:
     #[test]
     fn run_for_events() {
         run_inner(
-            &hex::decode("29e99f07000000000000000000000000000000000000000000000000000000000000002a")
-                .unwrap(),
+            &hex::decode(
+                "29e99f07000000000000000000000000000000000000000000000000000000000000002a",
+            )
+            .unwrap(),
             VmLaunchOption::Default,
             WITH_EVENTS_ASSEMBLY,
         );
     }
 
-    const SIMPLE_TOUCH_STORAGE: &'static str = r#"
+    const SIMPLE_TOUCH_STORAGE: &str = r#"
     .text
 	.file	"Test_41"
 	.rodata.cst32
@@ -1188,7 +1185,7 @@ __entry:
         );
     }
 
-    const SIMPLE_STORAGE_WITH_ROLLBACK: &'static str = r#"
+    const SIMPLE_STORAGE_WITH_ROLLBACK: &str = r#"
     .text
 	.file	"Test_41"
 	.rodata.cst32
@@ -1218,7 +1215,7 @@ __entry:
         );
     }
 
-    const SIMPLE_STORAGE_WITH_ROLLBACK_OF_CHILD: &'static str = r#"
+    const SIMPLE_STORAGE_WITH_ROLLBACK_OF_CHILD: &str = r#"
     .text
 	.file	"Test_41"
 	.rodata.cst32
@@ -1254,7 +1251,7 @@ __entry:
         );
     }
 
-    const MANUAL_DEFAULT_UNWIND_LABEL_ACCESS: &'static str = r#"
+    const MANUAL_DEFAULT_UNWIND_LABEL_ACCESS: &str = r#"
                 .text
                 .file    "Test_16"
                 .globl    __entry
@@ -1591,7 +1588,7 @@ __entry:
         );
     }
 
-    const ENSURE_PROPER_RETURN_ON_REVERT: &'static str = r#"
+    const ENSURE_PROPER_RETURN_ON_REVERT: &str = r#"
             .text
             .file	"Test_73"
             .globl	__entry
@@ -2231,14 +2228,16 @@ __entry:
     fn run_returndata_on_revert() {
         set_tracing_mode(VmTracingOptions::ManualVerbose);
         run_inner(
-            &hex::decode("bb0fa1300000000000000000000000000000000000000000000000000000000000000001")
-                .unwrap(),
+            &hex::decode(
+                "bb0fa1300000000000000000000000000000000000000000000000000000000000000001",
+            )
+            .unwrap(),
             VmLaunchOption::Default,
             ENSURE_PROPER_RETURN_ON_REVERT,
         );
     }
 
-    const KECCAK256_SYSTEM_ASM: &'static str = r#"
+    const KECCAK256_SYSTEM_ASM: &str = r#"
 	.text
 	.file	"Test_270"
 	.globl	__entry
@@ -2437,7 +2436,7 @@ CPI1_11:
         );
     }
 
-    const SHA256_SYSTEM_ASM: &'static str = r#"
+    const SHA256_SYSTEM_ASM: &str = r#"
     
 	.text
 	.file	"Test_293"

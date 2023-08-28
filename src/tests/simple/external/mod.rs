@@ -9,7 +9,10 @@ pub(crate) fn read_assembly_from_file(path_and_filename: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{trace::run_inner, runners::compiler_tests::{VmTracingOptions, VmLaunchOption, set_tracing_mode}};
+    use crate::{
+        runners::compiler_tests::{set_tracing_mode, VmLaunchOption, VmTracingOptions},
+        trace::run_inner,
+    };
 
     #[test]
     fn test_simple_storage() {

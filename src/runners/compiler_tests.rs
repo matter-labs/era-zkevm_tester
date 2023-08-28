@@ -118,14 +118,10 @@ impl MemoryArea {
             starting_word + 1
         };
 
-        let range_end = if end_cap == 0 {
+        let range_end = if end_cap == 0 || end_word == 0 {
             end_word
         } else {
-            if end_word == 0 {
-                end_word
-            } else {
-                end_word - 1
-            }
+            end_word - 1
         };
 
         for i in range_start..range_end {
@@ -147,7 +143,7 @@ impl MemoryArea {
 }
 
 pub fn calldata_to_aligned_data(calldata: &[u8]) -> Vec<U256> {
-    if calldata.len() == 0 {
+    if calldata.is_empty() {
         return vec![];
     }
     let mut capacity = calldata.len() / 32;
@@ -172,7 +168,7 @@ pub(crate) fn dump_memory_page_using_primitive_value(
     memory: &SimpleHashmapMemory,
     ptr: PrimitiveValue,
 ) -> Vec<u8> {
-    if ptr.is_pointer == false {
+    if !ptr.is_pointer {
         return vec![];
     }
     let fat_ptr = FatPointer::from_u256(ptr.value);
@@ -194,7 +190,7 @@ pub(crate) fn dump_memory_page_using_fat_pointer(
 pub(crate) fn fat_ptr_into_page_and_aligned_words_range(
     ptr: PrimitiveValue,
 ) -> (u32, std::ops::Range<u32>) {
-    if ptr.is_pointer == false {
+    if !ptr.is_pointer {
         return (0, 0..0);
     }
     let fat_ptr = FatPointer::from_u256(ptr.value);
@@ -214,9 +210,8 @@ pub(crate) fn dump_memory_page_by_offset_and_length(
     offset: usize,
     length: usize,
 ) -> Vec<u8> {
-    let mut dump = Vec::with_capacity(length);
     if length == 0 {
-        return dump;
+        return vec![];
     }
 
     let first_word = offset / 32;
@@ -231,39 +226,14 @@ pub(crate) fn dump_memory_page_by_offset_and_length(
     let page_part =
         memory.dump_page_content_as_u256_words(page, (first_word as u32)..(last_word as u32));
 
-    let mut is_first = true;
-    let mut remaining = length;
-    for word in page_part.into_iter() {
-        let mut it = word.into_be_iter();
-        if is_first {
-            is_first = false;
-            let mut it = it.skip(unalignment);
-            while let Some(next) = it.next() {
-                if remaining > 0 {
-                    dump.push(next);
-                    remaining -= 1;
-                }
-            }
-        } else {
-            while let Some(next) = it.next() {
-                if remaining > 0 {
-                    dump.push(next);
-                    remaining -= 1;
-                }
-            }
-        }
-    }
-
-    assert_eq!(
-        dump.len(),
-        length,
-        "tried to dump with offset {}, length {}, got a bytestring of length {}",
-        offset,
-        length,
-        dump.len()
-    );
-
-    dump
+    let mut it = page_part.into_iter();
+    it.next()
+        .unwrap()
+        .into_be_iter()
+        .skip(unalignment)
+        .chain(it.flat_map(|word| word.into_be_iter()))
+        .take(length)
+        .collect()
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -278,11 +248,11 @@ impl StorageKey {
         hasher.update(self.address.as_bytes());
         let mut buffer = [0u8; 32];
         self.key.to_big_endian(&mut buffer);
-        hasher.update(&buffer);
+        hasher.update(buffer);
 
         let result = hasher.finalize();
 
-        let key = U256::from_big_endian(&result.as_slice());
+        let key = U256::from_big_endian(result.as_slice());
 
         key
     }
@@ -459,7 +429,7 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
         reverse_lookup_for_assembly.insert(bytecode_hash, assembly);
     }
 
-    let decommitter_els: Vec<_> = factory_deps.into_iter().into_iter().collect();
+    let decommitter_els: Vec<_> = factory_deps.into_iter().collect();
 
     tools.decommittment_processor.populate(decommitter_els);
 
@@ -528,7 +498,7 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool, const N: usize, E: VmEncoding
         vm.local_state.callstack.get_current_stack().pc.as_u64(),
     ) {
         (true, 0) => {
-            let returndata = dump_memory_page_using_primitive_value(&vm.memory, r1);
+            let returndata = dump_memory_page_using_primitive_value(vm.memory, r1);
 
             Some(VmExecutionResult::Ok(returndata))
         }
@@ -538,7 +508,7 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool, const N: usize, E: VmEncoding
             if vm.local_state.flags.overflow_or_less_than_flag {
                 Some(VmExecutionResult::Panic)
             } else {
-                let returndata = dump_memory_page_using_primitive_value(&vm.memory, r1);
+                let returndata = dump_memory_page_using_primitive_value(vm.memory, r1);
                 Some(VmExecutionResult::Revert(returndata))
             }
         }
@@ -669,7 +639,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     use zk_evm::contract_bytecode_to_words;
 
     // fill the calldata
-    let aligned_calldata = calldata_to_aligned_data(&calldata);
+    let aligned_calldata = calldata_to_aligned_data(calldata);
     // and initial memory page
     let initial_assembly = contracts
         .get(&entry_address)
@@ -689,15 +659,13 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     // fill the storage. Only rollup shard for now
     for (key, value) in storage.into_iter() {
         let per_address_entry = tools.storage.inner[0].entry(key.address).or_default();
-        per_address_entry.insert(key.key, U256::from_big_endian(&value.as_bytes()));
+        per_address_entry.insert(key.key, U256::from_big_endian(value.as_bytes()));
     }
 
     // some context notion
-    let context = context.unwrap_or_else(|| {
-        let mut ctx = VmExecutionContext::default();
-        ctx.this_address = entry_address;
-
-        ctx
+    let context = context.unwrap_or_else(|| VmExecutionContext {
+        this_address: entry_address,
+        ..Default::default()
     });
 
     // fill the rest
@@ -975,7 +943,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
         memory_page_counter: local_state.memory_page_counter,
         tx_number_in_block: local_state.tx_number_in_block,
         previous_super_pc: local_state.previous_super_pc.as_u64() as u32,
-        did_call_or_ret_recently: did_call_or_ret_recently,
+        did_call_or_ret_recently,
         calldata_area_dump: calldata_mem,
         returndata_area_dump: returndata_mem,
         execution_has_ended,

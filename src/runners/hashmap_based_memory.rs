@@ -55,7 +55,7 @@ impl SimpleHashmapMemory {
         range: std::ops::Range<u32>,
     ) -> Vec<U256> {
         if let Some(page) = self.inner.get(&page_number) {
-            let mut result = Vec::with_capacity(range.len() as usize);
+            let mut result = Vec::with_capacity(range.len());
             for i in range {
                 if let Some(word) = page.get(&i) {
                     result.push(word.value);
@@ -104,7 +104,7 @@ use zk_evm::vm_state::PrimitiveValue;
 
 impl Memory for SimpleHashmapMemory {
     fn read_code_query(&self, _monotonic_cycle_counter: u32, query: MemoryQuery) -> MemoryQuery {
-        assert!(query.rw_flag == false);
+        assert!(!query.rw_flag);
 
         if let Some(existing) = self.inner.get(&query.location.page.0) {
             if let Some(value) = existing.get(&query.location.index.0) {
