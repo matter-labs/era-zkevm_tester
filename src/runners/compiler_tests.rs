@@ -9,7 +9,6 @@ use crate::{Address, H256, U256};
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::atomic::AtomicU64;
-use zk_evm::block_properties::*;
 use zk_evm::reference_impls::decommitter::SimpleDecommitter;
 use zk_evm::reference_impls::event_sink::{EventMessage, InMemoryEventSink};
 use zk_evm::testing::storage::InMemoryStorage;
@@ -22,6 +21,7 @@ use zk_evm::zkevm_opcode_defs::definitions::ret::RET_IMPLICIT_RETURNDATA_PARAMS_
 use zk_evm::zkevm_opcode_defs::system_params::DEPLOYER_SYSTEM_CONTRACT_ADDRESS;
 use zk_evm::zkevm_opcode_defs::FatPointer;
 use zk_evm::{aux_structures::*, GenericNoopTracer};
+use zk_evm::{block_properties::*, contract_bytecode_to_words};
 use zk_evm_abstractions::precompiles::DefaultPrecompilesProcessor;
 use zkevm_assembly::Assembly;
 
@@ -397,7 +397,6 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
     >,
     HashMap<U256, Assembly>,
 ) {
-    use zk_evm::contract_bytecode_to_words;
     use zk_evm::utils::bytecode_to_code_hash_for_mode;
     // fill the decommitter
 
@@ -419,11 +418,8 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
         let _existing = factory_deps.insert(bytecode_hash_as_u256, bytecode_words);
     }
 
-    for (bytecode_hash, assembly) in known_contracts.into_iter() {
-        let mut assembly = assembly;
-        let bytecode = assembly
-            .compile_to_bytecode_for_mode::<N, E>()
-            .expect("must compile an assembly");
+    for (bytecode_hash, mut assembly) in known_contracts.into_iter() {
+        let bytecode = assembly.compile_to_bytecode().unwrap();
         let bytecode_words = contract_bytecode_to_words(&bytecode);
         let _ = factory_deps.insert(bytecode_hash, bytecode_words);
         reverse_lookup_for_assembly.insert(bytecode_hash, assembly);
@@ -567,6 +563,346 @@ pub fn run_vm_multi_contracts(
     }
 }
 
+type Bytecode = Vec<[u8; 32]>;
+
+trait TestableVM {
+    fn run(
+        entry_address: Address,
+        calldata: Option<Vec<U256>>,
+        context: VmExecutionContext,
+        initial_pc: usize,
+        r2_to_r5: [U256; 4],
+        contracts: HashMap<Address, Assembly>,
+        factory_deps: HashMap<U256, Assembly>,
+        storage: HashMap<StorageKey, H256>,
+        block_properties: BlockProperties,
+        cycles_limit: usize,
+    ) -> anyhow::Result<VmSnapshot>;
+}
+
+struct ZkEVM<const N: usize, E: VmEncodingMode<N>> {
+    _e: std::marker::PhantomData<E>,
+}
+
+impl<const N: usize, E: VmEncodingMode<N>> TestableVM for ZkEVM<N, E> {
+    fn run(
+        entry_address: Address,
+        calldata: Option<Vec<U256>>,
+        context: VmExecutionContext,
+        initial_pc: usize,
+        r2_to_r5: [U256; 4],
+        contracts: HashMap<Address, Assembly>,
+        factory_deps: HashMap<U256, Assembly>,
+        storage: HashMap<StorageKey, H256>,
+        block_properties: BlockProperties,
+        cycles_limit: usize,
+    ) -> anyhow::Result<VmSnapshot> {
+        let mut initial_assembly = contracts[&entry_address].clone();
+        let initial_bytecode = initial_assembly.compile_to_bytecode().unwrap();
+
+        let mut tools = create_default_testing_tools();
+
+        for (key, value) in storage.into_iter() {
+            let per_address_entry = tools.storage.inner[0].entry(key.address).or_default();
+            per_address_entry.insert(key.key, U256::from_big_endian(value.as_bytes()));
+        }
+
+        tools.memory.populate(vec![(
+            ENTRY_POINT_PAGE,
+            zk_evm::contract_bytecode_to_words(&initial_bytecode),
+        )]);
+        if let Some(ref calldata) = calldata {
+            tools
+                .memory
+                .populate(vec![(CALLDATA_PAGE, calldata.clone())]);
+        }
+
+        let (mut vm, reverse_lookup_for_assembly) = create_vm::<false, N, E>(
+            &mut tools,
+            &block_properties,
+            context,
+            &contracts,
+            factory_deps,
+            E::PcOrImm::from_u64_clipped(initial_pc as u64),
+        );
+
+        if let Some(calldata) = calldata {
+            vm.local_state.registers[0] =
+                crate::utils::form_initial_calldata_ptr(CALLDATA_PAGE, calldata.len() as u32);
+        }
+
+        for (i, x) in (2..).zip(r2_to_r5) {
+            vm.local_state.registers[i] = PrimitiveValue {
+                value: x,
+                is_pointer: false,
+            };
+        }
+
+        let mut result = None;
+        let mut cycles_used = 0;
+
+        match get_tracing_mode() {
+            VmTracingOptions::None => {
+                vm.witness_tracer.is_dummy = true;
+                let mut tracer = GenericNoopTracer::new();
+                for _ in 0..cycles_limit {
+                    vm.cycle(&mut tracer)?;
+                    cycles_used += 1;
+
+                    // early return
+                    if let Some(end_result) = vm_may_have_ended(&vm) {
+                        result = Some(end_result);
+                        break;
+                    }
+                }
+            }
+            VmTracingOptions::TraceDump => {
+                use crate::trace::*;
+
+                let mut tracer =
+                    VmDebugTracer::new_from_entry_point(entry_address, &initial_assembly);
+                tracer.add_known_contracts(&contracts);
+
+                for _ in 0..cycles_limit {
+                    vm.witness_tracer.queries.truncate(0);
+                    vm.cycle(&mut tracer)?;
+                    cycles_used += 1;
+
+                    // manually replace all memory interactions
+                    let last_step = tracer.steps.last_mut().unwrap();
+                    last_step.memory_interactions.truncate(0);
+                    for query in vm.witness_tracer.queries.drain(..) {
+                        let memory_type = match query.location.memory_type {
+                            zk_evm::abstractions::MemoryType::Heap => {
+                                crate::trace::MemoryType::heap
+                            }
+                            zk_evm::abstractions::MemoryType::AuxHeap => {
+                                crate::trace::MemoryType::aux_heap
+                            }
+                            zk_evm::abstractions::MemoryType::FatPointer => {
+                                crate::trace::MemoryType::fat_ptr
+                            }
+                            zk_evm::abstractions::MemoryType::Code => {
+                                crate::trace::MemoryType::code
+                            }
+                            zk_evm::abstractions::MemoryType::Stack => {
+                                crate::trace::MemoryType::stack
+                            }
+                        };
+
+                        let page = query.location.page.0;
+                        let address = query.location.index.0;
+                        let value = format!("{:064x}", query.value);
+                        let direction = if query.rw_flag {
+                            crate::trace::MemoryAccessType::Write
+                        } else {
+                            crate::trace::MemoryAccessType::Read
+                        };
+
+                        let as_interaction = MemoryInteraction {
+                            memory_type,
+                            page,
+                            address,
+                            value,
+                            direction,
+                        };
+
+                        last_step.memory_interactions.push(as_interaction);
+                    }
+
+                    // early return
+                    if let Some(end_result) = vm_may_have_ended(&vm) {
+                        result = Some(end_result);
+                        break;
+                    }
+                }
+
+                pub fn is_trace_enabled() -> bool {
+                    std::env::var("RUST_LOG")
+                        .map(|variable| variable.contains("vm=trace"))
+                        .unwrap_or_default()
+                }
+
+                if is_trace_enabled() {
+                    let VmDebugTracer {
+                        steps,
+                        debug_info: debug_infos_map,
+                        ..
+                    } = tracer;
+
+                    let empty_callstack_dummy_debug_info = ContractSourceDebugInfo {
+                        assembly_code: "nop r0, r0, r0, r0".to_owned(),
+                        pc_line_mapping: HashMap::from([(0, 0)]),
+                        active_lines: std::collections::HashSet::from([0]),
+                    };
+
+                    let mut sources = HashMap::new();
+
+                    sources.insert(
+                        EMPTY_CONTEXT_HEX.to_owned(),
+                        empty_callstack_dummy_debug_info,
+                    );
+
+                    for (address, info) in debug_infos_map.into_iter() {
+                        sources.insert(format!("0x{}", hex::encode(address.as_bytes())), info);
+                    }
+
+                    let full_trace = VmTrace { steps, sources };
+                    output_execution_trace(full_trace, entry_address, "".into());
+                    //TODO
+                }
+            }
+            VmTracingOptions::ManualVerbose => {
+                vm.witness_tracer.is_dummy = true;
+                use crate::runners::debug_tracer::DebugTracerWithAssembly;
+                let mut tracer = DebugTracerWithAssembly {
+                    current_code_address: entry_address,
+                    code_address_to_assembly: contracts,
+                    _marker: std::marker::PhantomData,
+                };
+                for _ in 0..cycles_limit {
+                    vm.cycle(&mut tracer)?;
+                    cycles_used += 1;
+
+                    // early return
+                    if let Some(end_result) = vm_may_have_ended(&vm) {
+                        result = Some(end_result);
+                        break;
+                    }
+                }
+            }
+        }
+
+        let return_abi_register = vm.local_state.registers[0]; // r1
+
+        let execution_result = if let Some(result) = result {
+            result
+        } else {
+            let current_address = vm.local_state.callstack.get_current_stack().this_address;
+            let pc = vm.local_state.callstack.get_current_stack().pc.as_u64();
+            VmExecutionResult::MostLikelyDidNotFinish(current_address, pc)
+        };
+
+        let execution_has_ended = vm.execution_has_ended();
+
+        let VmState {
+            local_state,
+            block_properties: _,
+            ..
+        } = vm;
+
+        let mut result_storage = HashMap::new();
+        let mut deployed_contracts = HashMap::new();
+
+        let ExtendedTestingTools {
+            storage,
+            memory,
+            event_sink,
+            precompiles_processor: _,
+            decommittment_processor: _,
+            witness_tracer: _,
+        } = tools;
+
+        let (_full_history, raw_events, l1_messages) = event_sink.flatten();
+        use crate::runners::events::merge_events;
+        let events = merge_events(raw_events.clone());
+
+        let (_history, _per_slot) = storage.clone().flatten_and_net_history();
+        // dbg!(history);
+        // dbg!(per_slot);
+
+        let storage = storage.inner;
+        let storage = storage.into_iter().next().unwrap();
+
+        for (address, inner) in storage.into_iter() {
+            for (key, value) in inner.into_iter() {
+                let storage_key = StorageKey { address, key };
+                let mut buffer = [0u8; 32];
+                value.to_big_endian(&mut buffer);
+                let value_h256 = H256::from_slice(&buffer);
+                result_storage.insert(storage_key, value_h256);
+
+                if address == *DEPLOYER_SYSTEM_CONTRACT_ADDRESS {
+                    let mut buffer = [0u8; 32];
+                    key.to_big_endian(&mut buffer);
+                    let deployed_address = Address::from_slice(&buffer[12..]);
+                    if let Some(known_bytecode) = reverse_lookup_for_assembly.get(&value) {
+                        deployed_contracts.insert(deployed_address, known_bytecode.clone());
+                    }
+                }
+            }
+        }
+
+        // memory dump for returndata
+        let returndata_page_content = if get_tracing_mode() != VmTracingOptions::None {
+            if return_abi_register.is_pointer {
+                let return_abi_ptr = FatPointer::from_u256(return_abi_register.value);
+                memory.dump_full_page_as_u256_words(return_abi_ptr.memory_page)
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        };
+
+        let returndata_mem = MemoryArea {
+            words: returndata_page_content,
+        };
+
+        let calldata_page_content = if get_tracing_mode() != VmTracingOptions::None {
+            memory.dump_full_page_as_u256_words(CALLDATA_PAGE)
+        } else {
+            vec![]
+        };
+
+        let calldata_mem = MemoryArea {
+            words: calldata_page_content,
+        };
+
+        let returndata_bytes = match &execution_result {
+            VmExecutionResult::Ok(ref res) => res.clone(),
+            VmExecutionResult::Revert(ref res) => res.clone(),
+            VmExecutionResult::Panic => vec![],
+            VmExecutionResult::MostLikelyDidNotFinish(..) => vec![],
+        };
+
+        let compiler_tests_events: Vec<crate::runners::events::Event> =
+            events.iter().cloned().map(|el| el.into()).collect();
+
+        let serialized_events = serde_json::to_string_pretty(&compiler_tests_events).unwrap();
+
+        let did_call_or_ret_recently = local_state.previous_code_memory_page.0
+            != local_state.callstack.get_current_stack().code_page.0;
+
+        Ok(VmSnapshot {
+            registers: local_state.registers,
+            flags: local_state.flags,
+            timestamp: local_state.timestamp,
+            memory_page_counter: local_state.memory_page_counter,
+            tx_number_in_block: local_state.tx_number_in_block,
+            previous_super_pc: local_state.previous_super_pc.as_u64() as u32,
+            did_call_or_ret_recently,
+            calldata_area_dump: calldata_mem,
+            returndata_area_dump: returndata_mem,
+            execution_has_ended,
+            stack_dump: MemoryArea::empty(),
+            heap_dump: MemoryArea::empty(),
+            storage: result_storage,
+            deployed_contracts,
+            execution_result,
+            returndata_bytes,
+            raw_events,
+            to_l1_messages: l1_messages,
+            events,
+            serialized_events,
+            num_cycles_used: cycles_used,
+            // All the ergs from the empty frame should be passed into the root(bootloader) and unused ergs will be returned.
+            num_ergs_used: zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS
+                - local_state.callstack.current.ergs_remaining,
+        })
+    }
+}
+
 ///
 /// Used for testing the compiler with multiple contracts.
 ///
@@ -597,7 +933,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     }
 
     let (initial_pc, set_far_call_props, extra_props) = match &vm_launch_option {
-        VmLaunchOption::Pc(pc) => (E::PcOrImm::from_u64_clipped(*pc as u64), false, None),
+        VmLaunchOption::Pc(pc) => (*pc as usize, false, None),
         VmLaunchOption::Label(label) => {
             let offset = *contracts
                 .get(&entry_address)
@@ -606,14 +942,12 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
                 .get(label)
                 .unwrap();
 
-            (E::PcOrImm::from_u64_clipped(offset as u64), false, None)
+            (offset, false, None)
         }
-        VmLaunchOption::Default | VmLaunchOption::Call => {
-            (E::PcOrImm::from_u64_clipped(0u64), true, None)
-        }
+        VmLaunchOption::Default | VmLaunchOption::Call => (0, true, None),
 
         VmLaunchOption::Constructor => (
-            E::PcOrImm::from_u64_clipped(0u64),
+            0,
             true,
             Some(FullABIParams {
                 is_constructor: true,
@@ -623,69 +957,24 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
                 r5_value: None,
             }),
         ),
-        VmLaunchOption::ManualCallABI(value) => (
-            E::PcOrImm::from_u64_clipped(0u64),
-            true,
-            Some(value.clone()),
-        ),
+        VmLaunchOption::ManualCallABI(value) => (0, true, Some(value.clone())),
     };
 
-    let mut tools = create_default_testing_tools();
     let mut block_properties = create_default_block_properties();
     block_properties.default_aa_code_hash = default_aa_code_hash;
 
-    let calldata_length = calldata.len();
-    use zk_evm::contract_bytecode_to_words;
-
-    // fill the calldata
-    let aligned_calldata = calldata_to_aligned_data(calldata);
-    // and initial memory page
-    let initial_assembly = contracts
-        .get(&entry_address)
-        .cloned()
-        .ok_or_else(|| anyhow::anyhow!("Initial assembly not found"))?;
-    let initial_bytecode = initial_assembly
-        .clone()
-        .compile_to_bytecode_for_mode::<N, E>()
-        .unwrap();
-    let initial_bytecode_as_memory = contract_bytecode_to_words(&initial_bytecode);
-
-    tools.memory.populate(vec![
-        (CALLDATA_PAGE, aligned_calldata),
-        (ENTRY_POINT_PAGE, initial_bytecode_as_memory),
-    ]);
-
-    // fill the storage. Only rollup shard for now
-    for (key, value) in storage.into_iter() {
-        let per_address_entry = tools.storage.inner[0].entry(key.address).or_default();
-        per_address_entry.insert(key.key, U256::from_big_endian(value.as_bytes()));
-    }
-
-    // some context notion
     let context = context.unwrap_or_else(|| VmExecutionContext {
         this_address: entry_address,
         ..Default::default()
     });
 
-    // fill the rest
-    let (mut vm, reverse_lookup_for_assembly) = create_vm::<false, N, E>(
-        &mut tools,
-        &block_properties,
-        context,
-        &contracts,
-        known_contracts,
-        initial_pc,
-    );
+    let calldata = if set_far_call_props {
+        Some(calldata_to_aligned_data(calldata))
+    } else {
+        None
+    };
 
-    if set_far_call_props {
-        // we need to properly set calldata abi
-        vm.local_state.registers[0] =
-            crate::utils::form_initial_calldata_ptr(CALLDATA_PAGE, calldata_length as u32);
-
-        vm.local_state.registers[1] = PrimitiveValue::empty();
-        vm.local_state.registers[2] = PrimitiveValue::empty();
-        vm.local_state.registers[3] = PrimitiveValue::empty();
-
+    let r2_to_r5 = if set_far_call_props {
         if let Some(extra_props) = extra_props {
             let mut r2_value = U256::zero();
             if extra_props.is_constructor {
@@ -695,272 +984,31 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
                 r2_value += U256::from(1u64 << 1);
             }
 
-            let r3_value = extra_props.r3_value.unwrap_or(U256::zero());
-            let r4_value = extra_props.r4_value.unwrap_or(U256::zero());
-            let r5_value = extra_props.r5_value.unwrap_or(U256::zero());
-
-            vm.local_state.registers[1] = PrimitiveValue::from_value(r2_value);
-            vm.local_state.registers[2] = PrimitiveValue::from_value(r3_value);
-            vm.local_state.registers[3] = PrimitiveValue::from_value(r4_value);
-            vm.local_state.registers[4] = PrimitiveValue::from_value(r5_value);
-        }
-    }
-
-    let mut result = None;
-
-    let mut cycles_used = 0;
-
-    match get_tracing_mode() {
-        VmTracingOptions::None => {
-            vm.witness_tracer.is_dummy = true;
-            let mut tracer = GenericNoopTracer::new();
-            for _ in 0..cycles_limit {
-                vm.cycle(&mut tracer)?;
-                cycles_used += 1;
-
-                // early return
-                if let Some(end_result) = vm_may_have_ended(&vm) {
-                    result = Some(end_result);
-                    break;
-                }
-            }
-        }
-        VmTracingOptions::TraceDump => {
-            use crate::trace::*;
-
-            let mut tracer = VmDebugTracer::new_from_entry_point(entry_address, &initial_assembly);
-            tracer.add_known_contracts(&contracts);
-
-            for _ in 0..cycles_limit {
-                vm.witness_tracer.queries.truncate(0);
-                vm.cycle(&mut tracer)?;
-                cycles_used += 1;
-
-                // manually replace all memory interactions
-                let last_step = tracer.steps.last_mut().unwrap();
-                last_step.memory_interactions.truncate(0);
-                for query in vm.witness_tracer.queries.drain(..) {
-                    let memory_type = match query.location.memory_type {
-                        zk_evm::abstractions::MemoryType::Heap => crate::trace::MemoryType::heap,
-                        zk_evm::abstractions::MemoryType::AuxHeap => {
-                            crate::trace::MemoryType::aux_heap
-                        }
-                        zk_evm::abstractions::MemoryType::FatPointer => {
-                            crate::trace::MemoryType::fat_ptr
-                        }
-                        zk_evm::abstractions::MemoryType::Code => crate::trace::MemoryType::code,
-                        zk_evm::abstractions::MemoryType::Stack => crate::trace::MemoryType::stack,
-                    };
-
-                    let page = query.location.page.0;
-                    let address = query.location.index.0;
-                    let value = format!("{:064x}", query.value);
-                    let direction = if query.rw_flag {
-                        crate::trace::MemoryAccessType::Write
-                    } else {
-                        crate::trace::MemoryAccessType::Read
-                    };
-
-                    let as_interaction = MemoryInteraction {
-                        memory_type,
-                        page,
-                        address,
-                        value,
-                        direction,
-                    };
-
-                    last_step.memory_interactions.push(as_interaction);
-                }
-
-                // early return
-                if let Some(end_result) = vm_may_have_ended(&vm) {
-                    result = Some(end_result);
-                    break;
-                }
-            }
-
-            pub fn is_trace_enabled() -> bool {
-                std::env::var("RUST_LOG")
-                    .map(|variable| variable.contains("vm=trace"))
-                    .unwrap_or_default()
-            }
-
-            if is_trace_enabled() {
-                let VmDebugTracer {
-                    steps,
-                    debug_info: debug_infos_map,
-                    ..
-                } = tracer;
-
-                let empty_callstack_dummy_debug_info = ContractSourceDebugInfo {
-                    assembly_code: "nop r0, r0, r0, r0".to_owned(),
-                    pc_line_mapping: HashMap::from([(0, 0)]),
-                    active_lines: std::collections::HashSet::from([0]),
-                };
-
-                let mut sources = HashMap::new();
-
-                sources.insert(
-                    EMPTY_CONTEXT_HEX.to_owned(),
-                    empty_callstack_dummy_debug_info,
-                );
-
-                for (address, info) in debug_infos_map.into_iter() {
-                    sources.insert(format!("0x{}", hex::encode(address.as_bytes())), info);
-                }
-
-                let full_trace = VmTrace { steps, sources };
-                output_execution_trace(full_trace, entry_address, test_name);
-            }
-        }
-        VmTracingOptions::ManualVerbose => {
-            vm.witness_tracer.is_dummy = true;
-            use crate::runners::debug_tracer::DebugTracerWithAssembly;
-            let mut tracer = DebugTracerWithAssembly {
-                current_code_address: entry_address,
-                code_address_to_assembly: contracts,
-                _marker: std::marker::PhantomData,
-            };
-            for _ in 0..cycles_limit {
-                vm.cycle(&mut tracer)?;
-                cycles_used += 1;
-
-                // early return
-                if let Some(end_result) = vm_may_have_ended(&vm) {
-                    result = Some(end_result);
-                    break;
-                }
-            }
-        }
-    }
-
-    let return_abi_register = vm.local_state.registers[0]; // r1
-
-    let execution_result = if let Some(result) = result {
-        result
-    } else {
-        let current_address = vm.local_state.callstack.get_current_stack().this_address;
-        let pc = vm.local_state.callstack.get_current_stack().pc.as_u64();
-        VmExecutionResult::MostLikelyDidNotFinish(current_address, pc)
-    };
-
-    let execution_has_ended = vm.execution_has_ended();
-
-    let VmState {
-        local_state,
-        block_properties: _,
-        ..
-    } = vm;
-
-    let mut result_storage = HashMap::new();
-    let mut deployed_contracts = HashMap::new();
-
-    let ExtendedTestingTools {
-        storage,
-        memory,
-        event_sink,
-        precompiles_processor: _,
-        decommittment_processor: _,
-        witness_tracer: _,
-    } = tools;
-
-    let (_full_history, raw_events, l1_messages) = event_sink.flatten();
-    use crate::runners::events::merge_events;
-    let events = merge_events(raw_events.clone());
-
-    let (_history, _per_slot) = storage.clone().flatten_and_net_history();
-    // dbg!(history);
-    // dbg!(per_slot);
-
-    let storage = storage.inner;
-    let storage = storage.into_iter().next().unwrap();
-
-    for (address, inner) in storage.into_iter() {
-        for (key, value) in inner.into_iter() {
-            let storage_key = StorageKey { address, key };
-            let mut buffer = [0u8; 32];
-            value.to_big_endian(&mut buffer);
-            let value_h256 = H256::from_slice(&buffer);
-            result_storage.insert(storage_key, value_h256);
-
-            if address == *DEPLOYER_SYSTEM_CONTRACT_ADDRESS {
-                let mut buffer = [0u8; 32];
-                key.to_big_endian(&mut buffer);
-                let deployed_address = Address::from_slice(&buffer[12..]);
-                if let Some(known_assembly) = reverse_lookup_for_assembly.get(&value) {
-                    deployed_contracts.insert(deployed_address, known_assembly.clone());
-                }
-            }
-        }
-    }
-
-    // memory dump for returndata
-    let returndata_page_content = if get_tracing_mode() != VmTracingOptions::None {
-        if return_abi_register.is_pointer {
-            let return_abi_ptr = FatPointer::from_u256(return_abi_register.value);
-            memory.dump_full_page_as_u256_words(return_abi_ptr.memory_page)
+            [
+                r2_value,
+                extra_props.r3_value.unwrap_or(U256::zero()),
+                extra_props.r4_value.unwrap_or(U256::zero()),
+                extra_props.r5_value.unwrap_or(U256::zero()),
+            ]
         } else {
-            vec![]
+            [U256::zero(); 4]
         }
     } else {
-        vec![]
+        [U256::zero(); 4]
     };
 
-    let returndata_mem = MemoryArea {
-        words: returndata_page_content,
-    };
-
-    let calldata_page_content = if get_tracing_mode() != VmTracingOptions::None {
-        memory.dump_full_page_as_u256_words(CALLDATA_PAGE)
-    } else {
-        vec![]
-    };
-
-    let calldata_mem = MemoryArea {
-        words: calldata_page_content,
-    };
-
-    let returndata_bytes = match &execution_result {
-        VmExecutionResult::Ok(ref res) => res.clone(),
-        VmExecutionResult::Revert(ref res) => res.clone(),
-        VmExecutionResult::Panic => vec![],
-        VmExecutionResult::MostLikelyDidNotFinish(..) => vec![],
-    };
-
-    let compiler_tests_events: Vec<crate::runners::events::Event> =
-        events.iter().cloned().map(|el| el.into()).collect();
-
-    let serialized_events = serde_json::to_string_pretty(&compiler_tests_events).unwrap();
-
-    let did_call_or_ret_recently = local_state.previous_code_memory_page.0
-        != local_state.callstack.get_current_stack().code_page.0;
-
-    Ok(VmSnapshot {
-        registers: local_state.registers,
-        flags: local_state.flags,
-        timestamp: local_state.timestamp,
-        memory_page_counter: local_state.memory_page_counter,
-        tx_number_in_block: local_state.tx_number_in_block,
-        previous_super_pc: local_state.previous_super_pc.as_u64() as u32,
-        did_call_or_ret_recently,
-        calldata_area_dump: calldata_mem,
-        returndata_area_dump: returndata_mem,
-        execution_has_ended,
-        stack_dump: MemoryArea::empty(),
-        heap_dump: MemoryArea::empty(),
-        storage: result_storage,
-        deployed_contracts,
-        execution_result,
-        returndata_bytes,
-        raw_events,
-        to_l1_messages: l1_messages,
-        events,
-        serialized_events,
-        num_cycles_used: cycles_used,
-        // All the ergs from the empty frame should be passed into the root(bootloader) and unused ergs will be returned.
-        num_ergs_used: zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS
-            - local_state.callstack.current.ergs_remaining,
-    })
+    ZkEVM::<N, E>::run(
+        entry_address,
+        calldata,
+        context,
+        initial_pc,
+        r2_to_r5,
+        contracts,
+        known_contracts,
+        storage,
+        block_properties,
+        cycles_limit,
+    )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
