@@ -1,3 +1,4 @@
+use super::vm2_runner::Vm2;
 use super::*;
 
 use crate::default_environment::*;
@@ -563,9 +564,9 @@ pub fn run_vm_multi_contracts(
     }
 }
 
-type Bytecode = Vec<[u8; 32]>;
+pub type Bytecode = Vec<[u8; 32]>;
 
-trait TestableVM {
+pub trait TestableVM {
     fn run(
         entry_address: Address,
         calldata: Option<Vec<U256>>,
@@ -997,7 +998,8 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
         [U256::zero(); 4]
     };
 
-    ZkEVM::<N, E>::run(
+    //ZkEVM::<N, E>::run(
+    Vm2::run(
         entry_address,
         calldata,
         context,

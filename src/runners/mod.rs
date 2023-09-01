@@ -3,6 +3,7 @@ pub mod debug_tracer;
 pub mod events;
 pub mod hashmap_based_memory;
 pub mod simple_witness_tracer;
+mod vm2_runner;
 
 use crate::trace::VmTrace;
 use crate::Address;
