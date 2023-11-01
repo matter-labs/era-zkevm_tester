@@ -122,8 +122,8 @@ pub fn run_text_assembly_full_trace(
     known_contracts.insert(default_callee_address(), vm_assembly.clone());
 
     let (mut vm, _) = crate::runners::compiler_tests::create_vm::<false, 8, EncodingModeProduction>(
-        &mut tools,
-        &block_properties,
+        tools,
+        block_properties,
         context,
         &known_contracts,
         HashMap::new(),

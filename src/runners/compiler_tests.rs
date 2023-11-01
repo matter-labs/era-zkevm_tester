@@ -14,6 +14,7 @@ use zk_evm::reference_impls::decommitter::SimpleDecommitter;
 use zk_evm::reference_impls::event_sink::{EventMessage, InMemoryEventSink};
 use zk_evm::testing::storage::InMemoryStorage;
 use zk_evm::vm_state::*;
+use zk_evm::zk_evm_abstractions::precompiles::DefaultPrecompilesProcessor;
 use zk_evm::zkevm_opcode_defs::decoding::AllowedPcOrImm;
 use zk_evm::zkevm_opcode_defs::decoding::{
     EncodingModeProduction, EncodingModeTesting, VmEncodingMode,
@@ -23,7 +24,6 @@ use zk_evm::zkevm_opcode_defs::system_params::DEPLOYER_SYSTEM_CONTRACT_ADDRESS;
 use zk_evm::zkevm_opcode_defs::FatPointer;
 use zk_evm::{aux_structures::*, GenericNoopTracer};
 use zk_evm::{block_properties::*, contract_bytecode_to_words};
-use zk_evm_abstractions::precompiles::DefaultPrecompilesProcessor;
 use zkevm_assembly::Assembly;
 
 use sha2::{Digest, Sha256};
@@ -378,15 +378,14 @@ pub fn create_default_testing_tools() -> ExtendedTestingTools<false> {
 }
 
 pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
-    tools: &'a mut ExtendedTestingTools<B>,
-    block_properties: &'a BlockProperties,
+    mut tools: ExtendedTestingTools<B>,
+    block_properties: BlockProperties,
     context: VmExecutionContext,
     contracts: &HashMap<Address, Assembly>,
     known_contracts: HashMap<U256, Assembly>,
     initial_pc: E::PcOrImm,
 ) -> (
     VmState<
-        'a,
         InMemoryStorage,
         SimpleHashmapMemory,
         InMemoryEventSink,
@@ -431,12 +430,12 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
     tools.decommittment_processor.populate(decommitter_els);
 
     let mut vm = VmState::empty_state(
-        &mut tools.storage,
-        &mut tools.memory,
-        &mut tools.event_sink,
-        &mut tools.precompiles_processor,
-        &mut tools.decommittment_processor,
-        &mut tools.witness_tracer,
+        tools.storage,
+        tools.memory,
+        tools.event_sink,
+        tools.precompiles_processor,
+        tools.decommittment_processor,
+        tools.witness_tracer,
         block_properties,
     );
 
@@ -473,7 +472,6 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
 
 pub(crate) fn vm_may_have_ended<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
     vm: &VmState<
-        'a,
         InMemoryStorage,
         SimpleHashmapMemory,
         InMemoryEventSink,
@@ -495,7 +493,7 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool, const N: usize, E: VmEncoding
         vm.local_state.callstack.get_current_stack().pc.as_u64(),
     ) {
         (true, 0) => {
-            let returndata = dump_memory_page_using_primitive_value(vm.memory, r1);
+            let returndata = dump_memory_page_using_primitive_value(&vm.memory, r1);
 
             Some(VmExecutionResult::Ok(returndata))
         }
@@ -505,7 +503,7 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool, const N: usize, E: VmEncoding
             if vm.local_state.flags.overflow_or_less_than_flag {
                 Some(VmExecutionResult::Panic)
             } else {
-                let returndata = dump_memory_page_using_primitive_value(vm.memory, r1);
+                let returndata = dump_memory_page_using_primitive_value(&vm.memory, r1);
                 Some(VmExecutionResult::Revert(returndata))
             }
         }
@@ -619,8 +617,8 @@ impl<const N: usize, E: VmEncodingMode<N>> TestableVM for ZkEVM<N, E> {
         }
 
         let (mut vm, reverse_lookup_for_assembly) = create_vm::<false, N, E>(
-            &mut tools,
-            &block_properties,
+            tools,
+            block_properties,
             context,
             &contracts,
             factory_deps,
@@ -789,20 +787,14 @@ impl<const N: usize, E: VmEncodingMode<N>> TestableVM for ZkEVM<N, E> {
         let VmState {
             local_state,
             block_properties: _,
+            event_sink,
+            memory,
+            storage,
             ..
         } = vm;
 
         let mut result_storage = HashMap::new();
         let mut deployed_contracts = HashMap::new();
-
-        let ExtendedTestingTools {
-            storage,
-            memory,
-            event_sink,
-            precompiles_processor: _,
-            decommittment_processor: _,
-            witness_tracer: _,
-        } = tools;
 
         let (_full_history, raw_events, l1_messages) = event_sink.flatten();
         use crate::runners::events::merge_events;

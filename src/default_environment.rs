@@ -1,4 +1,5 @@
 use super::*;
+use zk_evm::zk_evm_abstractions::precompiles::DefaultPrecompilesProcessor;
 use zk_evm::{testing::*, zkevm_opcode_defs::decoding::EncodingModeProduction};
 
 pub const INITIAL_TIMESTAMP: u32 = 8;
@@ -44,11 +45,10 @@ pub fn create_default_block_properties() -> BlockProperties {
     }
 }
 
-pub fn create_vm_with_default_settings<'a, const B: bool>(
-    tools: &'a mut BasicTestingTools<B>,
-    block_properties: &'a BlockProperties,
+pub fn create_vm_with_default_settings<const B: bool>(
+    tools: BasicTestingTools<B>,
+    block_properties: BlockProperties,
 ) -> VmState<
-    'a,
     InMemoryStorage,
     SimpleMemory,
     InMemoryEventSink,
@@ -57,12 +57,12 @@ pub fn create_vm_with_default_settings<'a, const B: bool>(
     DummyTracer,
 > {
     let mut vm = VmState::empty_state(
-        &mut tools.storage,
-        &mut tools.memory,
-        &mut tools.event_sink,
-        &mut tools.precompiles_processor,
-        &mut tools.decommittment_processor,
-        &mut tools.witness_tracer,
+        tools.storage,
+        tools.memory,
+        tools.event_sink,
+        tools.precompiles_processor,
+        tools.decommittment_processor,
+        tools.witness_tracer,
         block_properties,
     );
 
