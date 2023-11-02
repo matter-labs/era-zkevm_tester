@@ -10,7 +10,7 @@ resolver = "2"
 [dependencies]
 zk_evm = { git = "https://github.com/matter-labs/zk_evm", branch = "v1.4.1" }
 zkevm-assembly = { git = "https://github.com/matter-labs/era-zkEVM-assembly", branch = "v1.4.1" }
-vm2 = { path = "../vm2" }
+#vm2 = { path = "../vm2" }
 
 # zk_evm = {path = "../zk_evm"}
 # zkevm-assembly = {path = "../zkEVM-assembly"}

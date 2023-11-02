@@ -1,4 +1,4 @@
-use super::vm2_runner::Vm2;
+//use super::vm2_runner::Vm2;
 use super::*;
 
 use crate::default_environment::*;
@@ -990,8 +990,8 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
         [U256::zero(); 4]
     };
 
-    //ZkEVM::<N, E>::run(
-    Vm2::run(
+    ZkEVM::<N, E>::run(
+        //Vm2::run(
         entry_address,
         calldata,
         context,

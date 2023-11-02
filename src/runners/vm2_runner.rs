@@ -1,4 +1,4 @@
-use vm2::{decode::decode_program, State};
+/*use vm2::{decode::decode_program, State};
 use zk_evm::contract_bytecode_to_words;
 use zkevm_assembly::Assembly;
 
@@ -38,16 +38,17 @@ impl super::compiler_tests::TestableVM for Vm2 {
                 ]
             })
             .collect::<Vec<_>>();
-        //let program = decode_program(&instructions);
+        let program = decode_program(&instructions);
 
-        /*let mut state = State::default();
+        let mut state = State::default();
         for (reg, value) in state.registers[2..].iter_mut().zip(r2_to_r5) {
             *reg = value;
         }
         state.code_page = contract_bytecode_to_words(&bytecode);
 
-        state.run(&program);*/
+        state.run(&program);
 
         todo!()
     }
 }
+*/
