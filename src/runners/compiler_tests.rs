@@ -626,8 +626,10 @@ impl<const N: usize, E: VmEncodingMode<N>> TestableVM for ZkEVM<N, E> {
         );
 
         if let Some(calldata) = calldata {
-            vm.local_state.registers[0] =
-                crate::utils::form_initial_calldata_ptr(CALLDATA_PAGE, calldata.len() as u32);
+            vm.local_state.registers[0] = crate::utils::form_initial_calldata_ptr(
+                CALLDATA_PAGE,
+                (calldata.len() * 32) as u32,
+            );
         }
 
         for (i, x) in (2..).zip(r2_to_r5) {
