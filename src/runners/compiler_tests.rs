@@ -14,6 +14,7 @@ use zk_evm::reference_impls::decommitter::SimpleDecommitter;
 use zk_evm::reference_impls::event_sink::{EventMessage, InMemoryEventSink};
 use zk_evm::testing::storage::InMemoryStorage;
 use zk_evm::vm_state::*;
+use zk_evm::zk_evm_abstractions::precompiles::DefaultPrecompilesProcessor;
 use zk_evm::zkevm_opcode_defs::decoding::AllowedPcOrImm;
 use zk_evm::zkevm_opcode_defs::decoding::{
     EncodingModeProduction, EncodingModeTesting, VmEncodingMode,
@@ -22,7 +23,6 @@ use zk_evm::zkevm_opcode_defs::definitions::ret::RET_IMPLICIT_RETURNDATA_PARAMS_
 use zk_evm::zkevm_opcode_defs::system_params::DEPLOYER_SYSTEM_CONTRACT_ADDRESS;
 use zk_evm::zkevm_opcode_defs::FatPointer;
 use zk_evm::{aux_structures::*, GenericNoopTracer};
-use zk_evm_abstractions::precompiles::DefaultPrecompilesProcessor;
 use zkevm_assembly::Assembly;
 
 use sha2::{Digest, Sha256};
@@ -146,7 +146,7 @@ impl MemoryArea {
     }
 }
 
-pub fn calldata_to_aligned_data(calldata: &Vec<u8>) -> Vec<U256> {
+pub fn calldata_to_aligned_data(calldata: &[u8]) -> Vec<U256> {
     if calldata.len() == 0 {
         return vec![];
     }
@@ -348,10 +348,10 @@ pub fn default_entry_point_contract_address() -> Address {
 /// Used for testing the compiler with a single contract.
 ///
 #[allow(clippy::too_many_arguments)]
-pub async fn run_vm(
+pub fn run_vm(
     test_name: String,
     assembly: Assembly,
-    calldata: Vec<u8>,
+    calldata: &[u8],
     storage: HashMap<StorageKey, H256>,
     context: Option<VmExecutionContext>,
     vm_launch_option: VmLaunchOption,
@@ -374,7 +374,6 @@ pub async fn run_vm(
         known_contracts,
         default_aa_code_hash,
     )
-    .await
 }
 
 pub struct ExtendedTestingTools<const B: bool> {
@@ -407,16 +406,15 @@ pub fn create_default_testing_tools() -> ExtendedTestingTools<false> {
     }
 }
 
-pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
-    tools: &'a mut ExtendedTestingTools<B>,
-    block_properties: &'a BlockProperties,
+pub fn create_vm<const B: bool, const N: usize, E: VmEncodingMode<N>>(
+    mut tools: ExtendedTestingTools<B>,
+    block_properties: BlockProperties,
     context: VmExecutionContext,
     contracts: &HashMap<Address, Assembly>,
     known_contracts: HashMap<U256, Assembly>,
     initial_pc: E::PcOrImm,
 ) -> (
     VmState<
-        'a,
         InMemoryStorage,
         SimpleHashmapMemory,
         InMemoryEventSink,
@@ -465,12 +463,12 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
     tools.decommittment_processor.populate(decommitter_els);
 
     let mut vm = VmState::empty_state(
-        &mut tools.storage,
-        &mut tools.memory,
-        &mut tools.event_sink,
-        &mut tools.precompiles_processor,
-        &mut tools.decommittment_processor,
-        &mut tools.witness_tracer,
+        tools.storage,
+        tools.memory,
+        tools.event_sink,
+        tools.precompiles_processor,
+        tools.decommittment_processor,
+        tools.witness_tracer,
         block_properties,
     );
 
@@ -505,9 +503,8 @@ pub fn create_vm<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
     (vm, reverse_lookup_for_assembly)
 }
 
-pub(crate) fn vm_may_have_ended<'a, const B: bool, const N: usize, E: VmEncodingMode<N>>(
+pub(crate) fn vm_may_have_ended<const B: bool, const N: usize, E: VmEncodingMode<N>>(
     vm: &VmState<
-        'a,
         InMemoryStorage,
         SimpleHashmapMemory,
         InMemoryEventSink,
@@ -554,10 +551,10 @@ pub(crate) fn vm_may_have_ended<'a, const B: bool, const N: usize, E: VmEncoding
 /// Used for testing the compiler with multiple contracts.
 ///
 #[allow(clippy::too_many_arguments)]
-pub async fn run_vm_multi_contracts(
+pub fn run_vm_multi_contracts(
     test_name: String,
     contracts: HashMap<Address, Assembly>,
-    calldata: Vec<u8>,
+    calldata: &[u8],
     storage: HashMap<StorageKey, H256>,
     entry_address: Address,
     context: Option<VmExecutionContext>,
@@ -582,23 +579,19 @@ pub async fn run_vm_multi_contracts(
                 known_contracts,
                 default_aa_code_hash,
             )
-            .await
         }
-        RunningVmEncodingMode::Testing => {
-            run_vm_multi_contracts_inner::<16, EncodingModeTesting>(
-                test_name,
-                contracts,
-                calldata,
-                storage,
-                entry_address,
-                context,
-                vm_launch_option,
-                cycles_limit,
-                known_contracts,
-                default_aa_code_hash,
-            )
-            .await
-        }
+        RunningVmEncodingMode::Testing => run_vm_multi_contracts_inner::<16, EncodingModeTesting>(
+            test_name,
+            contracts,
+            calldata,
+            storage,
+            entry_address,
+            context,
+            vm_launch_option,
+            cycles_limit,
+            known_contracts,
+            default_aa_code_hash,
+        ),
     }
 }
 
@@ -606,10 +599,10 @@ pub async fn run_vm_multi_contracts(
 /// Used for testing the compiler with multiple contracts.
 ///
 #[allow(clippy::too_many_arguments)]
-async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
+fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     test_name: String,
     contracts: HashMap<Address, Assembly>,
-    calldata: Vec<u8>,
+    calldata: &[u8],
     storage: HashMap<StorageKey, H256>,
     entry_address: Address,
     context: Option<VmExecutionContext>,
@@ -674,7 +667,7 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     use zk_evm::contract_bytecode_to_words;
 
     // fill the calldata
-    let aligned_calldata = calldata_to_aligned_data(&calldata);
+    let aligned_calldata = calldata_to_aligned_data(calldata);
     // and initial memory page
     let initial_assembly = contracts
         .get(&entry_address)
@@ -707,8 +700,8 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
 
     // fill the rest
     let (mut vm, reverse_lookup_for_assembly) = create_vm::<false, N, E>(
-        &mut tools,
-        &block_properties,
+        tools,
+        block_properties,
         context,
         &contracts,
         known_contracts,
@@ -887,20 +880,14 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     let VmState {
         local_state,
         block_properties: _,
+        storage,
+        memory,
+        event_sink,
         ..
     } = vm;
 
     let mut result_storage = HashMap::new();
     let mut deployed_contracts = HashMap::new();
-
-    let ExtendedTestingTools {
-        storage,
-        memory,
-        event_sink,
-        precompiles_processor: _,
-        decommittment_processor: _,
-        witness_tracer: _,
-    } = tools;
 
     let (_full_history, raw_events, l1_messages) = event_sink.flatten();
     use crate::runners::events::merge_events;
@@ -970,7 +957,8 @@ async fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
 
     let serialized_events = serde_json::to_string_pretty(&compiler_tests_events).unwrap();
 
-    let did_call_or_ret_recently = local_state.previous_code_memory_page.0 != local_state.callstack.get_current_stack().code_page.0;
+    let did_call_or_ret_recently = local_state.previous_code_memory_page.0
+        != local_state.callstack.get_current_stack().code_page.0;
 
     Ok(VmSnapshot {
         registers: local_state.registers,

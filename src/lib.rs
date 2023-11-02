@@ -9,7 +9,6 @@ use zk_evm::reference_impls::event_sink::InMemoryEventSink;
 use zk_evm::reference_impls::memory::SimpleMemory;
 use zk_evm::testing::storage::InMemoryStorage;
 use zk_evm::witness_trace::DummyTracer;
-use zk_evm_abstractions::precompiles::DefaultPrecompilesProcessor;
 use zkevm_assembly::Assembly;
 
 pub mod default_environment;

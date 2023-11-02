@@ -120,8 +120,8 @@ pub fn run_text_assembly_full_trace(
     known_contracts.insert(default_callee_address(), vm_assembly.clone());
 
     let (mut vm, _) = crate::runners::compiler_tests::create_vm::<false, 8, EncodingModeProduction>(
-        &mut tools,
-        &block_properties,
+        tools,
+        block_properties,
         context,
         &known_contracts,
         HashMap::new(),
@@ -668,16 +668,15 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::tracing::Tracer<N, E> for VmD
 
 use crate::runners::compiler_tests::VmLaunchOption;
 
-pub(crate) fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_text: &str) {
+pub(crate) fn run_inner(calldata: &[u8], options: VmLaunchOption, assembly_text: &str) {
     use crate::runners::compiler_tests::*;
 
-    use futures::executor::block_on;
     let assembly = Assembly::try_from(assembly_text.to_owned()).unwrap();
     let bytecode = assembly.clone().compile_to_bytecode().unwrap();
     let hash = U256::from(zk_evm::utils::bytecode_to_code_hash(&bytecode).unwrap());
     let mut known_contracts = HashMap::new();
     known_contracts.insert(hash, assembly.clone());
-    let snapshot = block_on(run_vm(
+    let snapshot = run_vm(
         "manual".to_owned(),
         assembly.clone(),
         calldata,
@@ -687,7 +686,7 @@ pub(crate) fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_tex
         u16::MAX as usize,
         known_contracts,
         U256::zero(),
-    ))
+    )
     .unwrap();
 
     let VmSnapshot {
@@ -716,14 +715,13 @@ pub(crate) fn run_inner(calldata: Vec<u8>, options: VmLaunchOption, assembly_tex
 use crate::runners::compiler_tests::VmExecutionContext;
 
 pub(crate) fn run_inner_with_context(
-    calldata: Vec<u8>,
+    calldata: &[u8],
     options: VmLaunchOption,
     assembly_text: &str,
     context: VmExecutionContext,
 ) {
     use crate::runners::compiler_tests::*;
 
-    use futures::executor::block_on;
     let assembly = Assembly::try_from(assembly_text.to_owned()).unwrap();
     let bytecode = assembly.clone().compile_to_bytecode().unwrap();
     let hash = U256::from(zk_evm::utils::bytecode_to_code_hash(&bytecode).unwrap());
@@ -732,7 +730,7 @@ pub(crate) fn run_inner_with_context(
     let entry_address = context.this_address;
     let mut contracts: HashMap<Address, Assembly> = HashMap::new();
     contracts.insert(entry_address, assembly.clone());
-    let snapshot = block_on(run_vm_multi_contracts(
+    let snapshot = run_vm_multi_contracts(
         "manual".to_owned(),
         contracts,
         calldata,
@@ -743,7 +741,7 @@ pub(crate) fn run_inner_with_context(
         u16::MAX as usize,
         known_contracts,
         U256::zero(),
-    ))
+    )
     .unwrap();
 
     let VmSnapshot {
@@ -806,7 +804,7 @@ pub mod test {
     #[test]
     fn test_manually() {
         run_inner(
-            hex::decode("5a8ac02d").unwrap(),
+            &hex::decode("5a8ac02d").unwrap(),
             VmLaunchOption::Default,
             SIMPLE_ASSEMBLY,
         );
@@ -815,7 +813,7 @@ pub mod test {
     #[test]
     fn test_constructor_manually() {
         run_inner(
-            hex::decode("5a8ac02d").unwrap(),
+            &hex::decode("5a8ac02d").unwrap(),
             VmLaunchOption::Constructor,
             SIMPLE_ASSEMBLY,
         );
@@ -982,8 +980,10 @@ __selector:
     #[test]
     fn run_for_events() {
         run_inner(
-            hex::decode("29e99f07000000000000000000000000000000000000000000000000000000000000002a")
-                .unwrap(),
+            &hex::decode(
+                "29e99f07000000000000000000000000000000000000000000000000000000000000002a",
+            )
+            .unwrap(),
             VmLaunchOption::Default,
             WITH_EVENTS_ASSEMBLY,
         );
@@ -1013,7 +1013,7 @@ __entry:
     #[test]
     fn run_for_simple_storage_touch() {
         run_inner(
-            hex::decode("").unwrap(),
+            &hex::decode("").unwrap(),
             VmLaunchOption::Default,
             SIMPLE_TOUCH_STORAGE,
         );
@@ -1043,7 +1043,7 @@ __entry:
     #[test]
     fn run_for_simple_storage_with_rollback() {
         run_inner(
-            hex::decode("").unwrap(),
+            &hex::decode("").unwrap(),
             VmLaunchOption::Default,
             SIMPLE_STORAGE_WITH_ROLLBACK,
         );
@@ -1079,7 +1079,7 @@ __entry:
     #[test]
     fn run_for_simple_storage_with_rollback_in_inner_frame() {
         run_inner(
-            hex::decode("").unwrap(),
+            &hex::decode("").unwrap(),
             VmLaunchOption::Default,
             SIMPLE_STORAGE_WITH_ROLLBACK_OF_CHILD,
         );
@@ -1416,7 +1416,7 @@ __entry:
     #[test]
     fn run_parse_manual_default_unwind() {
         run_inner(
-            hex::decode("").unwrap(),
+            &hex::decode("").unwrap(),
             VmLaunchOption::Default,
             MANUAL_DEFAULT_UNWIND_LABEL_ACCESS,
         );
@@ -2062,8 +2062,10 @@ __entry:
     fn run_returndata_on_revert() {
         set_tracing_mode(VmTracingOptions::ManualVerbose);
         run_inner(
-            hex::decode("bb0fa1300000000000000000000000000000000000000000000000000000000000000001")
-                .unwrap(),
+            &hex::decode(
+                "bb0fa1300000000000000000000000000000000000000000000000000000000000000001",
+            )
+            .unwrap(),
             VmLaunchOption::Default,
             ENSURE_PROPER_RETURN_ON_REVERT,
         );
@@ -2260,8 +2262,8 @@ CPI1_11:
         dbg!(ctx.msg_sender);
         dbg!(ctx.this_address);
         run_inner_with_context(
-            hex::decode("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap(),
-            // hex::decode("00ff").unwrap(), 
+            &hex::decode("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap(),
+            // &hex::decode("00ff").unwrap(),
             VmLaunchOption::Default,
             KECCAK256_SYSTEM_ASM,
             ctx
@@ -2452,7 +2454,7 @@ CPI1_11:
         dbg!(ctx.msg_sender);
         dbg!(ctx.this_address);
         run_inner_with_context(
-            hex::decode("00").unwrap(),
+            &hex::decode("00").unwrap(),
             // hex::decode("00ff").unwrap(),
             VmLaunchOption::Default,
             SHA256_SYSTEM_ASM,
@@ -2627,6 +2629,11 @@ CPI1_7:
         calldata.extend(r);
         calldata.extend(s);
 
-        run_inner_with_context(calldata, VmLaunchOption::Default, ECRECOVER_SYSTEM_ASM, ctx);
+        run_inner_with_context(
+            &calldata,
+            VmLaunchOption::Default,
+            ECRECOVER_SYSTEM_ASM,
+            ctx,
+        );
     }
 }
