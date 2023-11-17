@@ -42,6 +42,7 @@ pub fn create_default_block_properties() -> BlockProperties {
     BlockProperties {
         default_aa_code_hash: U256::zero(),
         zkporter_is_available: true,
+        evm_simulator_code_hash: U256::zero(),
     }
 }
 
@@ -84,6 +85,8 @@ pub fn create_vm_with_default_settings<'a, const B: bool>(
         context_u128_value: 0,
         heap_bound: 0,
         aux_heap_bound: 0,
+        total_pubdata_spent: PubdataCost(0),
+        stipend: 0u32,
     };
 
     // we consider the tested code as a bootloader
