@@ -9,7 +9,7 @@ pub(crate) fn read_assembly_from_file(path_and_filename: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::compiler_tests::set_tracing_mode;
+    use crate::runners::compiler_tests::*;
     use crate::trace::run_inner;
 
     #[test]
@@ -17,7 +17,7 @@ mod tests {
         set_tracing_mode(VmTracingOptions::ManualVerbose);
         let assembly = read_assembly_from_file("solidity_by_example/simple/first_app.sol.asm");
         run_inner(
-            hex::decode("06661abd").unwrap(),
+            &hex::decode("06661abd").unwrap(),
             VmLaunchOption::Default,
             &assembly,
         );

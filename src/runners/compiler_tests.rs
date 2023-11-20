@@ -490,6 +490,8 @@ pub fn create_vm<const B: bool, const N: usize, E: VmEncodingMode<N>>(
         context_u128_value: context.u128_value,
         heap_bound: 0,
         aux_heap_bound: 0,
+        total_pubdata_spent: PubdataCost(0),
+        stipend: 0u32,
     };
 
     // we consider the tested code as a bootloader
@@ -498,7 +500,6 @@ pub fn create_vm<const B: bool, const N: usize, E: VmEncodingMode<N>>(
     vm.local_state.memory_page_counter = INITIAL_MEMORY_COUNTER;
     vm.local_state.tx_number_in_block = context.transaction_index as u16;
     // (50 gwei(l1 gas price) * 17(l1 gas per pubdata byte)) / 250000000 (l2 base fee)
-    vm.local_state.current_ergs_per_pubdata_byte = 3400;
 
     (vm, reverse_lookup_for_assembly)
 }
