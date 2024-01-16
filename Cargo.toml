@@ -1,6 +1,6 @@
 [package]
 name = "zkevm_tester"
-version = "1.4.0"
+version = "1.4.1"
 edition = "2021"
 
 resolver = "2"
@@ -9,7 +9,7 @@ resolver = "2"
 
 [dependencies]
 zk_evm = { git = "https://github.com/matter-labs/zk_evm", branch = "v1.4.1" }
-zk_evm_abstractions = { git = "https://github.com/matter-labs/zk_evm_abstractions.git", branch = "v1.4.1" }
+zk_evm_abstractions = { git = "https://github.com/matter-labs/era-zk_evm_abstractions", branch = "v1.4.1" }
 zkevm-assembly = { git = "https://github.com/matter-labs/era-zkEVM-assembly", branch = "v1.4.1" }
 
 # zk_evm = {path = "../zk_evm"}
