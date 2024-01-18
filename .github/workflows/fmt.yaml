@@ -3,7 +3,7 @@ on: pull_request
 
 jobs:
   cargo-fmt:
-    runs-on: [self-hosted, ci-runner]
+    runs-on: [ubuntu-latest]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
