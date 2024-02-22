@@ -51,6 +51,7 @@ pub enum MemoryType {
     code,
     calldata,
     returndata,
+    static_memory,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

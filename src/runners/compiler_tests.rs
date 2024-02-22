@@ -782,6 +782,9 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
                         }
                         zk_evm::abstractions::MemoryType::Code => crate::trace::MemoryType::code,
                         zk_evm::abstractions::MemoryType::Stack => crate::trace::MemoryType::stack,
+                        zk_evm::abstractions::MemoryType::StaticMemory => {
+                            crate::trace::MemoryType::static_memory
+                        }
                     };
 
                     let page = query.location.page.0;
