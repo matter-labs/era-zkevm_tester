@@ -483,7 +483,8 @@ pub fn create_vm<const B: bool, const N: usize, E: VmEncodingMode<N>>(
         sp: E::PcOrImm::from_u64_clipped(0),
         pc: initial_pc,
         exception_handler_location: E::PcOrImm::max(),
-        ergs_remaining: zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS - 0xff000000,
+        ergs_remaining: zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS
+            - 0xff000000,
         this_shard_id: 0,
         caller_shard_id: 0,
         code_shard_id: 0,
