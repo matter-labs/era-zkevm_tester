@@ -358,6 +358,7 @@ pub fn run_vm(
     cycles_limit: usize,
     known_contracts: HashMap<U256, Assembly>,
     default_aa_code_hash: U256,
+    evm_simulator_code_hash: Option<U256>,
 ) -> anyhow::Result<VmSnapshot> {
     let entry_address = default_entry_point_contract_address();
     let mut contracts: HashMap<Address, Assembly> = HashMap::new();
@@ -373,6 +374,7 @@ pub fn run_vm(
         cycles_limit,
         known_contracts,
         default_aa_code_hash,
+        evm_simulator_code_hash,
     )
 }
 
@@ -481,7 +483,8 @@ pub fn create_vm<const B: bool, const N: usize, E: VmEncodingMode<N>>(
         sp: E::PcOrImm::from_u64_clipped(0),
         pc: initial_pc,
         exception_handler_location: E::PcOrImm::max(),
-        ergs_remaining: zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS,
+        ergs_remaining: zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS
+            - 0xff000000,
         this_shard_id: 0,
         caller_shard_id: 0,
         code_shard_id: 0,
@@ -563,6 +566,7 @@ pub fn run_vm_multi_contracts(
     cycles_limit: usize,
     known_contracts: HashMap<U256, Assembly>,
     default_aa_code_hash: U256,
+    evm_simulator_code_hash: Option<U256>,
 ) -> anyhow::Result<VmSnapshot> {
     use zkevm_assembly::{get_encoding_mode, RunningVmEncodingMode};
     let encoding_mode = get_encoding_mode();
@@ -579,6 +583,7 @@ pub fn run_vm_multi_contracts(
                 cycles_limit,
                 known_contracts,
                 default_aa_code_hash,
+                evm_simulator_code_hash,
             )
         }
         RunningVmEncodingMode::Testing => run_vm_multi_contracts_inner::<16, EncodingModeTesting>(
@@ -592,6 +597,7 @@ pub fn run_vm_multi_contracts(
             cycles_limit,
             known_contracts,
             default_aa_code_hash,
+            evm_simulator_code_hash,
         ),
     }
 }
@@ -611,6 +617,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     cycles_limit: usize,
     known_contracts: HashMap<U256, Assembly>,
     default_aa_code_hash: U256,
+    evm_simulator_code_hash: Option<U256>,
 ) -> anyhow::Result<VmSnapshot> {
     let mut contracts = contracts;
     for (a, c) in contracts.iter_mut() {
@@ -663,6 +670,9 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     let mut tools = create_default_testing_tools();
     let mut block_properties = create_default_block_properties();
     block_properties.default_aa_code_hash = default_aa_code_hash;
+    // we can always pretend it to be empty account
+    block_properties.evm_simulator_code_hash =
+        evm_simulator_code_hash.unwrap_or(default_aa_code_hash);
 
     let calldata_length = calldata.len();
     use zk_evm::contract_bytecode_to_words;
