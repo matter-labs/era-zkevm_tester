@@ -29,7 +29,7 @@ pub(crate) fn run_for_result_only(assembly_text: &str) {
         u16::MAX as usize,
         known_contracts,
         U256::from_big_endian(&default_aa_placeholder_hash),
-        None,
+        U256::from_big_endian(&default_aa_placeholder_hash),
     )
     .unwrap();
 
