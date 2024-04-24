@@ -2,7 +2,7 @@ use zk_evm::tracing::*;
 use zk_evm::{
     reference_impls::memory::SimpleMemory,
     u256_to_address_unchecked,
-    vm_state::CallStackEntry,
+    vm_state::*,
     zkevm_opcode_defs::decoding::{AllowedPcOrImm, EncodingModeProduction, VmEncodingMode},
 };
 use zkevm_assembly::Assembly;
@@ -167,26 +167,24 @@ impl<const N: usize, E: VmEncodingMode<N>> Tracer<N, E> for DebugTracerWithAssem
                         match abi.page_forwarding_mode {
                             RetForwardPageType::ForwardFatPointer => {}
                             RetForwardPageType::UseHeap => {
-                                abi.memory_quasi_fat_pointer.memory_page =
-                                    CallStackEntry::<N, E>::heap_page_from_base(
-                                        state
-                                            .vm_local_state
-                                            .callstack
-                                            .get_current_stack()
-                                            .base_memory_page,
-                                    )
-                                    .0;
+                                abi.memory_quasi_fat_pointer.memory_page = heap_page_from_base(
+                                    state
+                                        .vm_local_state
+                                        .callstack
+                                        .get_current_stack()
+                                        .base_memory_page,
+                                )
+                                .0;
                             }
                             RetForwardPageType::UseAuxHeap => {
-                                abi.memory_quasi_fat_pointer.memory_page =
-                                    CallStackEntry::<N, E>::aux_heap_page_from_base(
-                                        state
-                                            .vm_local_state
-                                            .callstack
-                                            .get_current_stack()
-                                            .base_memory_page,
-                                    )
-                                    .0;
+                                abi.memory_quasi_fat_pointer.memory_page = aux_heap_page_from_base(
+                                    state
+                                        .vm_local_state
+                                        .callstack
+                                        .get_current_stack()
+                                        .base_memory_page,
+                                )
+                                .0;
                             }
                         };
 
@@ -216,26 +214,24 @@ impl<const N: usize, E: VmEncodingMode<N>> Tracer<N, E> for DebugTracerWithAssem
                 match abi.forwarding_mode {
                     FarCallForwardPageType::ForwardFatPointer => {}
                     FarCallForwardPageType::UseHeap => {
-                        abi.memory_quasi_fat_pointer.memory_page =
-                            CallStackEntry::<N, E>::heap_page_from_base(
-                                state
-                                    .vm_local_state
-                                    .callstack
-                                    .get_current_stack()
-                                    .base_memory_page,
-                            )
-                            .0;
+                        abi.memory_quasi_fat_pointer.memory_page = heap_page_from_base(
+                            state
+                                .vm_local_state
+                                .callstack
+                                .get_current_stack()
+                                .base_memory_page,
+                        )
+                        .0;
                     }
                     FarCallForwardPageType::UseAuxHeap => {
-                        abi.memory_quasi_fat_pointer.memory_page =
-                            CallStackEntry::<N, E>::aux_heap_page_from_base(
-                                state
-                                    .vm_local_state
-                                    .callstack
-                                    .get_current_stack()
-                                    .base_memory_page,
-                            )
-                            .0;
+                        abi.memory_quasi_fat_pointer.memory_page = aux_heap_page_from_base(
+                            state
+                                .vm_local_state
+                                .callstack
+                                .get_current_stack()
+                                .base_memory_page,
+                        )
+                        .0;
                     }
                 }
 
