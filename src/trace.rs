@@ -315,11 +315,11 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::tracing::Tracer<N, E> for VmD
             set_flags: flags,
             skip_cycle,
             code_page_index: code_page,
-            heap_page_index: CallStackEntry::<N, E>::heap_page_from_base(MemoryPage(
+            heap_page_index: heap_page_from_base(MemoryPage(
                 base_memory_page,
             ))
             .0,
-            stack_page_index: CallStackEntry::<N, E>::stack_page_from_base(MemoryPage(
+            stack_page_index: stack_page_from_base(MemoryPage(
                 base_memory_page,
             ))
             .0,
@@ -407,25 +407,25 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::tracing::Tracer<N, E> for VmD
             let index = index.0;
             let mem_interaction = match page {
                 page if page
-                    == CallStackEntry::<N, E>::heap_page_from_base(MemoryPage(
+                    == heap_page_from_base(MemoryPage(
                         base_memory_page,
                     ))
                     .0
                     || page
-                        == CallStackEntry::<N, E>::stack_page_from_base(MemoryPage(
+                        == stack_page_from_base(MemoryPage(
                             base_memory_page,
                         ))
                         .0
                     || page == code_page =>
                 {
                     let memory_type = if page
-                        == CallStackEntry::<N, E>::heap_page_from_base(MemoryPage(base_memory_page))
+                        == heap_page_from_base(MemoryPage(base_memory_page))
                             .0
                     {
                         assert_eq!(memory_type, zk_evm::abstractions::MemoryType::Heap);
                         MemoryType::heap
                     } else if page
-                        == CallStackEntry::<N, E>::stack_page_from_base(MemoryPage(
+                        == stack_page_from_base(MemoryPage(
                             base_memory_page,
                         ))
                         .0
@@ -544,25 +544,25 @@ impl<const N: usize, E: VmEncodingMode<N>> zk_evm::tracing::Tracer<N, E> for VmD
             let index = index.0;
             let mem_interaction = match page {
                 page if page
-                    == CallStackEntry::<N, E>::heap_page_from_base(MemoryPage(
+                    == heap_page_from_base(MemoryPage(
                         base_memory_page,
                     ))
                     .0
                     || page
-                        == CallStackEntry::<N, E>::stack_page_from_base(MemoryPage(
+                        == stack_page_from_base(MemoryPage(
                             base_memory_page,
                         ))
                         .0
                     || page == code_page =>
                 {
                     let memory_type = if page
-                        == CallStackEntry::<N, E>::heap_page_from_base(MemoryPage(base_memory_page))
+                        == heap_page_from_base(MemoryPage(base_memory_page))
                             .0
                     {
                         assert_eq!(memory_type, zk_evm::abstractions::MemoryType::Heap);
                         MemoryType::heap
                     } else if page
-                        == CallStackEntry::<N, E>::stack_page_from_base(MemoryPage(
+                        == stack_page_from_base(MemoryPage(
                             base_memory_page,
                         ))
                         .0

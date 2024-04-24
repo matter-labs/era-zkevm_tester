@@ -1,13 +1,13 @@
 use super::*;
 use zk_evm::zk_evm_abstractions::precompiles::DefaultPrecompilesProcessor;
-use zk_evm::{testing::*, zkevm_opcode_defs::decoding::EncodingModeProduction};
+use zk_evm::{testing::*, vm_state::*, zkevm_opcode_defs::decoding::EncodingModeProduction};
 
 pub const INITIAL_TIMESTAMP: u32 = 8;
 pub const INITIAL_MEMORY_COUNTER: u32 = 8;
 pub const CALLDATA_PAGE: u32 = 3;
 pub const INITIAL_BASE_PAGE: u32 = 4;
 pub const ENTRY_POINT_PAGE: u32 =
-    CallStackEntry::<8, EncodingModeProduction>::code_page_candidate_from_base(MemoryPage(
+    code_page_candidate_from_base(MemoryPage(
         INITIAL_BASE_PAGE,
     ))
     .0;
