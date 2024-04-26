@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use zk_evm::{ethereum_types::{Address, H160, H256, U256}, reference_impls::{decommitter::SimpleDecommitter, event_sink::InMemoryEventSink, memory::SimpleMemory}, testing::storage::InMemoryStorage, vm_state::VmState, zk_evm_abstractions::precompiles::DefaultPrecompilesProcessor, zkevm_opcode_defs::{decoding::VmEncodingMode, system_params::{DEPLOYER_SYSTEM_CONTRACT_ADDRESS, KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS}, BlobSha256Format, FatPointer, VersionedHashLen32, CALL_IMPLICIT_CALLDATA_FAT_PTR_REGISTER}};
 
-use crate::{read_known_code_storage, runners::{hashmap_based_memory::SimpleHashmapMemory, simple_witness_tracer::MemoryLogWitnessTracer}};
+use crate::{publish_evm_bytecode_interface, runners::{hashmap_based_memory::SimpleHashmapMemory, simple_witness_tracer::MemoryLogWitnessTracer}};
 
 
 // In zk_evm@1.5.0 the "deployer address" constant is incorrect and it points to the account code storage.
@@ -49,7 +51,7 @@ pub(crate) fn record_deployed_evm_bytecode<const B: bool, const N: usize, E: VmE
 
     let data = read_pointer(&state.memory, FatPointer::from_u256(calldata_ptr.value));
 
-    let contract = read_known_code_storage();
+    let contract = publish_evm_bytecode_interface();
 
     if data.len() < 4 {
         // Not interested
@@ -83,9 +85,9 @@ pub(crate) fn record_deployed_evm_bytecode<const B: bool, const N: usize, E: VmE
     let as_words = bytes_to_be_words(published_bytecode);
 
     state.decommittment_processor.populate(
-        vec![(h256_to_u256(hash), as_words)],
+        vec![(h256_to_u256(hash), as_words.clone())],
     );
-}
+}   
 
 pub fn h256_to_u256(num: H256) -> U256 {
     U256::from_big_endian(num.as_bytes())

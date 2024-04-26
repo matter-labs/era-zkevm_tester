@@ -654,6 +654,7 @@ pub(crate) fn run_inner(calldata: &[u8], options: VmLaunchOption, assembly_text:
         options,
         u16::MAX as usize,
         known_contracts,
+        Default::default(),
         U256::from_big_endian(&default_aa_placeholder_hash),
         U256::from_big_endian(&default_aa_placeholder_hash),
     )
@@ -712,6 +713,7 @@ pub(crate) fn run_inner_with_context(
         options,
         u16::MAX as usize,
         known_contracts,
+        Default::default(),
         U256::from_big_endian(&default_aa_placeholder_hash),
         U256::from_big_endian(&default_aa_placeholder_hash),
     )

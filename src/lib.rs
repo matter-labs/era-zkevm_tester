@@ -1,5 +1,6 @@
 use std::fs::File;
 
+use serde_json::json;
 use zk_evm::zkevm_opcode_defs::ethereum_types::*;
 
 use zk_evm::aux_structures::*;
@@ -21,11 +22,24 @@ mod utils;
 
 mod tests;
 
-pub(crate) fn read_known_code_storage() -> ethabi::Contract {
-    let mut read_value: serde_json::Value = serde_json::from_reader(
-        File::open("./src/abi/KnownCodesStorage.json").unwrap_or_else(|e| panic!("Failed to open KnownCodeStorage: {}", e)),
-    )
-    .unwrap_or_else(|e| panic!("Failed to parse KnownCodeStorage: {}", e));
+pub(crate) fn publish_evm_bytecode_interface() -> ethabi::Contract {
+    let known_code_storage_abi = json!(
+        [
+            {
+                "inputs": [
+                  {
+                    "internalType": "bytes",
+                    "name": "bytecode",
+                    "type": "bytes"
+                  }
+                ],
+                "name": "publishEVMBytecode",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            }
+        ]
+    );
 
-    serde_json::from_value(read_value["abi"].take()).unwrap()
+    serde_json::from_value(known_code_storage_abi).unwrap()
 }
