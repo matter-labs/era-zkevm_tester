@@ -21,8 +21,13 @@ use zk_evm::zkevm_opcode_defs::decoding::{
     EncodingModeProduction, EncodingModeTesting, VmEncodingMode,
 };
 use zk_evm::zkevm_opcode_defs::definitions::ret::RET_IMPLICIT_RETURNDATA_PARAMS_REGISTER;
-use zk_evm::zkevm_opcode_defs::system_params::{DEPLOYER_SYSTEM_CONTRACT_ADDRESS, KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS};
-use zk_evm::zkevm_opcode_defs::{BlobSha256Format, ContractCodeSha256Format, FatPointer, VersionedHashLen32, VersionedHashNormalizedPreimage};
+use zk_evm::zkevm_opcode_defs::system_params::{
+    DEPLOYER_SYSTEM_CONTRACT_ADDRESS, KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
+};
+use zk_evm::zkevm_opcode_defs::{
+    BlobSha256Format, ContractCodeSha256Format, FatPointer, VersionedHashLen32,
+    VersionedHashNormalizedPreimage,
+};
 use zk_evm::{aux_structures::*, GenericNoopTracer};
 use zkevm_assembly::Assembly;
 
@@ -702,7 +707,9 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
         (ENTRY_POINT_PAGE, initial_bytecode_as_memory),
     ]);
 
-    tools.decommittment_processor.populate(known_sha256_blobs.into_iter().collect());
+    tools
+        .decommittment_processor
+        .populate(known_sha256_blobs.into_iter().collect());
 
     // fill the storage. Only rollup shard for now
     for (key, value) in storage.into_iter() {
@@ -949,12 +956,19 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
             key.to_big_endian(&mut key_buffer);
 
             // This is an EVM blob hash that has been set as known.
-            if address == *KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS && value == 1.into() && key_buffer[0] == BlobSha256Format::VERSION_BYTE {
-                let (_, normalized_hash) = ContractCodeSha256Format::normalize_for_decommitment(&key_buffer);
+            if address == *KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS
+                && value == 1.into()
+                && key_buffer[0] == BlobSha256Format::VERSION_BYTE
+            {
+                let (_, normalized_hash) =
+                    ContractCodeSha256Format::normalize_for_decommitment(&key_buffer);
 
                 published_sha256_blobs.insert(
                     key,
-                    decommittment_processor.get_preimage_by_hash(normalized_hash).expect("Published hash is unknown").clone(),
+                    decommittment_processor
+                        .get_preimage_by_hash(normalized_hash)
+                        .expect("Published hash is unknown")
+                        .clone(),
                 );
             }
         }
@@ -1026,7 +1040,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
         // All the ergs from the empty frame should be passed into the root(bootloader) and unused ergs will be returned.
         num_ergs_used: zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS
             - local_state.callstack.current.ergs_remaining,
-        published_sha256_blobs
+        published_sha256_blobs,
     })
 }
 

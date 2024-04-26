@@ -49,12 +49,12 @@ impl SimpleHashmapMemory {
         result
     }
 
-    pub fn read_slot(
-        &self,
-        page_number: u32,
-        slot: u32
-    ) -> PrimitiveValue {
-        self.inner.get(&page_number).and_then(|page| page.get(&slot)).copied().unwrap_or(PrimitiveValue::empty())
+    pub fn read_slot(&self, page_number: u32, slot: u32) -> PrimitiveValue {
+        self.inner
+            .get(&page_number)
+            .and_then(|page| page.get(&slot))
+            .copied()
+            .unwrap_or(PrimitiveValue::empty())
     }
 
     pub fn dump_page_content_as_u256_words(

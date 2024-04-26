@@ -1,9 +1,28 @@
 use std::collections::HashMap;
 
-use zk_evm::{ethereum_types::{Address, H160, H256, U256}, reference_impls::{decommitter::SimpleDecommitter, event_sink::InMemoryEventSink, memory::SimpleMemory}, testing::storage::InMemoryStorage, vm_state::VmState, zk_evm_abstractions::precompiles::DefaultPrecompilesProcessor, zkevm_opcode_defs::{decoding::VmEncodingMode, system_params::{DEPLOYER_SYSTEM_CONTRACT_ADDRESS, KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS}, BlobSha256Format, FatPointer, VersionedHashLen32, CALL_IMPLICIT_CALLDATA_FAT_PTR_REGISTER}};
+use zk_evm::{
+    ethereum_types::{Address, H160, H256, U256},
+    reference_impls::{
+        decommitter::SimpleDecommitter, event_sink::InMemoryEventSink, memory::SimpleMemory,
+    },
+    testing::storage::InMemoryStorage,
+    vm_state::VmState,
+    zk_evm_abstractions::precompiles::DefaultPrecompilesProcessor,
+    zkevm_opcode_defs::{
+        decoding::VmEncodingMode,
+        system_params::{
+            DEPLOYER_SYSTEM_CONTRACT_ADDRESS, KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
+        },
+        BlobSha256Format, FatPointer, VersionedHashLen32, CALL_IMPLICIT_CALLDATA_FAT_PTR_REGISTER,
+    },
+};
 
-use crate::{publish_evm_bytecode_interface, runners::{hashmap_based_memory::SimpleHashmapMemory, simple_witness_tracer::MemoryLogWitnessTracer}};
-
+use crate::{
+    publish_evm_bytecode_interface,
+    runners::{
+        hashmap_based_memory::SimpleHashmapMemory, simple_witness_tracer::MemoryLogWitnessTracer,
+    },
+};
 
 // In zk_evm@1.5.0 the "deployer address" constant is incorrect and it points to the account code storage.
 // so we duplicate those here.
@@ -17,17 +36,18 @@ const KNOWN_CODES_STORAGE_ADDRESS: Address = H160([
     0x00, 0x00, 0x80, 0x04,
 ]);
 
-
-pub(crate) fn record_deployed_evm_bytecode<const B: bool, const N: usize, E: VmEncodingMode<N>>(state: &mut VmState<
-    InMemoryStorage,
-    SimpleHashmapMemory,
-    InMemoryEventSink,
-    DefaultPrecompilesProcessor<B>,
-    SimpleDecommitter<B>,
-    MemoryLogWitnessTracer,
-    N,
-    E,
->) {
+pub(crate) fn record_deployed_evm_bytecode<const B: bool, const N: usize, E: VmEncodingMode<N>>(
+    state: &mut VmState<
+        InMemoryStorage,
+        SimpleHashmapMemory,
+        InMemoryEventSink,
+        DefaultPrecompilesProcessor<B>,
+        SimpleDecommitter<B>,
+        MemoryLogWitnessTracer,
+        N,
+        E,
+    >,
+) {
     // We check if ContractDeployer was called with provided evm bytecode.
     // It is assumed that by that time the user has already paid for its size.
     // So even if we do not revert the addition of the this bytecode it is not a ddos vector, since
@@ -84,10 +104,10 @@ pub(crate) fn record_deployed_evm_bytecode<const B: bool, const N: usize, E: VmE
     let hash = hash_evm_bytecode(&published_bytecode);
     let as_words = bytes_to_be_words(published_bytecode);
 
-    state.decommittment_processor.populate(
-        vec![(h256_to_u256(hash), as_words.clone())],
-    );
-}   
+    state
+        .decommittment_processor
+        .populate(vec![(h256_to_u256(hash), as_words.clone())]);
+}
 
 pub fn h256_to_u256(num: H256) -> U256 {
     U256::from_big_endian(num.as_bytes())
@@ -115,13 +135,9 @@ fn bytes_to_be_words(vec: Vec<u8>) -> Vec<U256> {
     vec.chunks(32).map(U256::from_big_endian).collect()
 }
 
-
 /// Reads the memory slice represented by the fat pointer.
 /// Note, that the fat pointer must point to the accessible memory (i.e. not cleared up yet).
-pub(crate) fn read_pointer(
-    memory: &SimpleHashmapMemory,
-    pointer: FatPointer,
-) -> Vec<u8> {
+pub(crate) fn read_pointer(memory: &SimpleHashmapMemory, pointer: FatPointer) -> Vec<u8> {
     let FatPointer {
         offset,
         length,
@@ -133,17 +149,17 @@ pub(crate) fn read_pointer(
     let mem_region_start = start + offset;
     let mem_region_length = length - offset;
 
-    read_unaligned_bytes(
-        memory,
-        memory_page,
-        mem_region_start,
-        mem_region_length,
-    )
+    read_unaligned_bytes(memory, memory_page, mem_region_start, mem_region_length)
 }
 
 // This method should be used with relatively small lengths, since
 // we don't heavily optimize here for cases with long lengths
-pub fn read_unaligned_bytes(memory: &SimpleHashmapMemory, page: u32, start: u32, length: u32) -> Vec<u8> {
+pub fn read_unaligned_bytes(
+    memory: &SimpleHashmapMemory,
+    page: u32,
+    start: u32,
+    length: u32,
+) -> Vec<u8> {
     if length == 0 {
         return vec![];
     }
@@ -174,7 +190,6 @@ pub fn read_unaligned_bytes(memory: &SimpleHashmapMemory, page: u32, start: u32,
 
     result
 }
-
 
 // It is expected that there is some intersection between `[word_number*32..word_number*32+31]` and `[start, end]`
 fn extract_needed_bytes_from_word(

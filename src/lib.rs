@@ -14,8 +14,8 @@ use zk_evm::testing::storage::InMemoryStorage;
 use zk_evm::witness_trace::DummyTracer;
 use zkevm_assembly::Assembly;
 
-mod evm_deploy_tracer;
 pub mod default_environment;
+mod evm_deploy_tracer;
 pub mod runners;
 pub mod trace;
 mod utils;
