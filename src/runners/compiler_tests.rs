@@ -1,6 +1,7 @@
 use super::*;
 
 use crate::default_environment::*;
+use crate::evm_deploy_tracer::record_deployed_evm_bytecode;
 use crate::runners::events::SolidityLikeEvent;
 use crate::runners::hashmap_based_memory::SimpleHashmapMemory;
 use crate::runners::simple_witness_tracer::MemoryLogWitnessTracer;
@@ -757,6 +758,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
             let mut tracer = GenericNoopTracer::new();
             for _ in 0..cycles_limit {
                 vm.cycle(&mut tracer)?;
+                record_deployed_evm_bytecode(&mut vm);
                 cycles_used += 1;
 
                 // early return
@@ -775,6 +777,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
             for _ in 0..cycles_limit {
                 vm.witness_tracer.queries.truncate(0);
                 vm.cycle(&mut tracer)?;
+                record_deployed_evm_bytecode(&mut vm);
                 cycles_used += 1;
 
                 // manually replace all memory interactions
@@ -867,6 +870,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
             };
             for _ in 0..cycles_limit {
                 vm.cycle(&mut tracer)?;
+                record_deployed_evm_bytecode(&mut vm);
                 cycles_used += 1;
 
                 // early return

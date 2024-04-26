@@ -7,6 +7,7 @@ use zk_evm::tracing::*;
 use zk_evm::zkevm_opcode_defs::decoding::{AllowedPcOrImm, EncodingModeProduction, VmEncodingMode};
 use zk_evm::zkevm_opcode_defs::{FatPointer, Opcode, REGISTERS_COUNT};
 
+use crate::evm_deploy_tracer::record_deployed_evm_bytecode;
 use crate::runners::compiler_tests::VmTracingOptions;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -145,6 +146,7 @@ pub fn run_text_assembly_full_trace(
 
     for _ in 0..num_cycles {
         vm.cycle(&mut tracer)?;
+        record_deployed_evm_bytecode(&mut vm);
     }
 
     let VmDebugTracer {
