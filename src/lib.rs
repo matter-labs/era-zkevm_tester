@@ -1,3 +1,6 @@
+use std::fs::File;
+
+use serde_json::json;
 use zk_evm::zkevm_opcode_defs::ethereum_types::*;
 
 use zk_evm::aux_structures::*;
@@ -12,8 +15,31 @@ use zk_evm::witness_trace::DummyTracer;
 use zkevm_assembly::Assembly;
 
 pub mod default_environment;
+mod evm_deploy_tracer;
 pub mod runners;
 pub mod trace;
 mod utils;
 
 mod tests;
+
+pub(crate) fn publish_evm_bytecode_interface() -> ethabi::Contract {
+    let known_code_storage_abi = json!(
+        [
+            {
+                "inputs": [
+                  {
+                    "internalType": "bytes",
+                    "name": "bytecode",
+                    "type": "bytes"
+                  }
+                ],
+                "name": "publishEVMBytecode",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            }
+        ]
+    );
+
+    serde_json::from_value(known_code_storage_abi).unwrap()
+}

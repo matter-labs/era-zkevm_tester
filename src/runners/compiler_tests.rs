@@ -1,6 +1,7 @@
 use super::*;
 
 use crate::default_environment::*;
+use crate::evm_deploy_tracer::record_deployed_evm_bytecode;
 use crate::runners::events::SolidityLikeEvent;
 use crate::runners::hashmap_based_memory::SimpleHashmapMemory;
 use crate::runners::simple_witness_tracer::MemoryLogWitnessTracer;
@@ -20,8 +21,13 @@ use zk_evm::zkevm_opcode_defs::decoding::{
     EncodingModeProduction, EncodingModeTesting, VmEncodingMode,
 };
 use zk_evm::zkevm_opcode_defs::definitions::ret::RET_IMPLICIT_RETURNDATA_PARAMS_REGISTER;
-use zk_evm::zkevm_opcode_defs::system_params::DEPLOYER_SYSTEM_CONTRACT_ADDRESS;
-use zk_evm::zkevm_opcode_defs::FatPointer;
+use zk_evm::zkevm_opcode_defs::system_params::{
+    DEPLOYER_SYSTEM_CONTRACT_ADDRESS, KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
+};
+use zk_evm::zkevm_opcode_defs::{
+    BlobSha256Format, ContractCodeSha256Format, FatPointer, VersionedHashLen32,
+    VersionedHashNormalizedPreimage,
+};
 use zk_evm::{aux_structures::*, GenericNoopTracer};
 use zkevm_assembly::Assembly;
 
@@ -331,6 +337,7 @@ pub struct VmSnapshot {
     pub serialized_events: String,
     pub num_cycles_used: usize,
     pub num_ergs_used: u32,
+    pub published_sha256_blobs: HashMap<U256, Vec<U256>>,
 }
 
 #[derive(Debug)]
@@ -357,6 +364,7 @@ pub fn run_vm(
     vm_launch_option: VmLaunchOption,
     cycles_limit: usize,
     known_contracts: HashMap<U256, Assembly>,
+    known_sha256_blobs: HashMap<U256, Vec<U256>>,
     default_aa_code_hash: U256,
     evm_simulator_code_hash: U256,
 ) -> anyhow::Result<VmSnapshot> {
@@ -373,6 +381,7 @@ pub fn run_vm(
         vm_launch_option,
         cycles_limit,
         known_contracts,
+        known_sha256_blobs,
         default_aa_code_hash,
         evm_simulator_code_hash,
     )
@@ -565,6 +574,7 @@ pub fn run_vm_multi_contracts(
     vm_launch_option: VmLaunchOption,
     cycles_limit: usize,
     known_contracts: HashMap<U256, Assembly>,
+    known_sha256_blobs: HashMap<U256, Vec<U256>>,
     default_aa_code_hash: U256,
     evm_simulator_code_hash: U256,
 ) -> anyhow::Result<VmSnapshot> {
@@ -582,6 +592,7 @@ pub fn run_vm_multi_contracts(
                 vm_launch_option,
                 cycles_limit,
                 known_contracts,
+                known_sha256_blobs,
                 default_aa_code_hash,
                 evm_simulator_code_hash,
             )
@@ -596,6 +607,7 @@ pub fn run_vm_multi_contracts(
             vm_launch_option,
             cycles_limit,
             known_contracts,
+            known_sha256_blobs,
             default_aa_code_hash,
             evm_simulator_code_hash,
         ),
@@ -616,6 +628,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     vm_launch_option: VmLaunchOption,
     cycles_limit: usize,
     known_contracts: HashMap<U256, Assembly>,
+    known_sha256_blobs: HashMap<U256, Vec<U256>>,
     default_aa_code_hash: U256,
     evm_simulator_code_hash: U256,
 ) -> anyhow::Result<VmSnapshot> {
@@ -694,6 +707,10 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
         (ENTRY_POINT_PAGE, initial_bytecode_as_memory),
     ]);
 
+    tools
+        .decommittment_processor
+        .populate(known_sha256_blobs.into_iter().collect());
+
     // fill the storage. Only rollup shard for now
     for (key, value) in storage.into_iter() {
         let per_address_entry = tools.storage.inner[0].entry(key.address).or_default();
@@ -757,6 +774,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
             let mut tracer = GenericNoopTracer::new();
             for _ in 0..cycles_limit {
                 vm.cycle(&mut tracer)?;
+                record_deployed_evm_bytecode(&mut vm);
                 cycles_used += 1;
 
                 // early return
@@ -775,6 +793,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
             for _ in 0..cycles_limit {
                 vm.witness_tracer.queries.truncate(0);
                 vm.cycle(&mut tracer)?;
+                record_deployed_evm_bytecode(&mut vm);
                 cycles_used += 1;
 
                 // manually replace all memory interactions
@@ -867,6 +886,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
             };
             for _ in 0..cycles_limit {
                 vm.cycle(&mut tracer)?;
+                record_deployed_evm_bytecode(&mut vm);
                 cycles_used += 1;
 
                 // early return
@@ -896,6 +916,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
         storage,
         memory,
         event_sink,
+        decommittment_processor,
         ..
     } = vm;
 
@@ -912,6 +933,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
 
     let storage = storage.inner;
     let storage = storage.into_iter().next().unwrap();
+    let mut published_sha256_blobs = HashMap::new();
 
     for (address, inner) in storage.into_iter() {
         for (key, value) in inner.into_iter() {
@@ -928,6 +950,26 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
                 if let Some(known_assembly) = reverse_lookup_for_assembly.get(&value) {
                     deployed_contracts.insert(deployed_address, known_assembly.clone());
                 }
+            }
+
+            let mut key_buffer = [0u8; 32];
+            key.to_big_endian(&mut key_buffer);
+
+            // This is an EVM blob hash that has been set as known.
+            if address == *KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS
+                && value == 1.into()
+                && key_buffer[0] == BlobSha256Format::VERSION_BYTE
+            {
+                let (_, normalized_hash) =
+                    ContractCodeSha256Format::normalize_for_decommitment(&key_buffer);
+
+                published_sha256_blobs.insert(
+                    key,
+                    decommittment_processor
+                        .get_preimage_by_hash(normalized_hash)
+                        .expect("Published hash is unknown")
+                        .clone(),
+                );
             }
         }
     }
@@ -998,6 +1040,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
         // All the ergs from the empty frame should be passed into the root(bootloader) and unused ergs will be returned.
         num_ergs_used: zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS
             - local_state.callstack.current.ergs_remaining,
+        published_sha256_blobs,
     })
 }
 

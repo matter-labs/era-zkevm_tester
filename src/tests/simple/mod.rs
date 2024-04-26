@@ -28,6 +28,7 @@ pub(crate) fn run_for_result_only(assembly_text: &str) {
         VmLaunchOption::Default,
         u16::MAX as usize,
         known_contracts,
+        Default::default(),
         U256::from_big_endian(&default_aa_placeholder_hash),
         U256::from_big_endian(&default_aa_placeholder_hash),
     )
