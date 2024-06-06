@@ -22,7 +22,8 @@ use zk_evm::zkevm_opcode_defs::decoding::{
 };
 use zk_evm::zkevm_opcode_defs::definitions::ret::RET_IMPLICIT_RETURNDATA_PARAMS_REGISTER;
 use zk_evm::zkevm_opcode_defs::system_params::{
-    DEPLOYER_SYSTEM_CONTRACT_ADDRESS, KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS, DEPLOYER_SYSTEM_CONTRACT_ADDRESS_LOW
+    DEPLOYER_SYSTEM_CONTRACT_ADDRESS, DEPLOYER_SYSTEM_CONTRACT_ADDRESS_LOW,
+    KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
 };
 use zk_evm::zkevm_opcode_defs::{
     BlobSha256Format, ContractCodeSha256Format, FatPointer, VersionedHashLen32,
@@ -694,14 +695,10 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     // and initial memory page
     let initial_assembly = {
         let hash = storage
-            .get(
-                &StorageKey {
-                    address: Address::from_low_u64_be(
-                        DEPLOYER_SYSTEM_CONTRACT_ADDRESS_LOW.into(),
-                    ),
-                    key: U256::from_big_endian(entry_address.as_bytes()),
-                }
-            )
+            .get(&StorageKey {
+                address: Address::from_low_u64_be(DEPLOYER_SYSTEM_CONTRACT_ADDRESS_LOW.into()),
+                key: U256::from_big_endian(entry_address.as_bytes()),
+            })
             .ok_or_else(|| anyhow::anyhow!("Entry address code hash not found in the storage"))?;
 
         // If it's an EVM contract, we should run the EVM simulator
