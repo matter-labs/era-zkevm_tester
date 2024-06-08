@@ -22,7 +22,8 @@ use zk_evm::zkevm_opcode_defs::decoding::{
 };
 use zk_evm::zkevm_opcode_defs::definitions::ret::RET_IMPLICIT_RETURNDATA_PARAMS_REGISTER;
 use zk_evm::zkevm_opcode_defs::system_params::{
-    DEPLOYER_SYSTEM_CONTRACT_ADDRESS, KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
+    DEPLOYER_SYSTEM_CONTRACT_ADDRESS, DEPLOYER_SYSTEM_CONTRACT_ADDRESS_LOW,
+    KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
 };
 use zk_evm::zkevm_opcode_defs::{
     BlobSha256Format, ContractCodeSha256Format, FatPointer, VersionedHashLen32,
@@ -692,10 +693,27 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     // fill the calldata
     let aligned_calldata = calldata_to_aligned_data(calldata);
     // and initial memory page
-    let initial_assembly = contracts
-        .get(&entry_address)
-        .cloned()
-        .ok_or_else(|| anyhow::anyhow!("Initial assembly not found"))?;
+    let initial_assembly = {
+        let hash = storage
+            .get(&StorageKey {
+                address: Address::from_low_u64_be(DEPLOYER_SYSTEM_CONTRACT_ADDRESS_LOW.into()),
+                key: U256::from_big_endian(entry_address.as_bytes()),
+            })
+            .ok_or_else(|| anyhow::anyhow!("Entry address code hash not found in the storage"))?;
+
+        // If it's an EVM contract, we should run the EVM simulator
+        if hash.as_bytes()[0] == BlobSha256Format::VERSION_BYTE {
+            known_contracts
+                .get(&evm_simulator_code_hash)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("EVM simulator not found in the known contracts"))?
+        } else {
+            contracts
+                .get(&entry_address)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("Initial assembly not found"))?
+        }
+    };
     let initial_bytecode = initial_assembly
         .clone()
         .compile_to_bytecode_for_mode::<N, E>()
