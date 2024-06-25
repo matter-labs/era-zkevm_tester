@@ -104,9 +104,16 @@ pub(crate) fn record_deployed_evm_bytecode<const B: bool, const N: usize, E: VmE
     let hash = hash_evm_bytecode(&published_bytecode);
     let as_words = bytes_to_be_words(published_bytecode);
 
-    state
+    let (_, normalized) = BlobSha256Format::normalize_for_decommitment(hash.as_fixed_bytes());
+    if state
         .decommittment_processor
-        .populate(vec![(h256_to_u256(hash), as_words.clone())]);
+        .get_preimage_by_hash(normalized)
+        .is_none()
+    {
+        state
+            .decommittment_processor
+            .populate(vec![(h256_to_u256(hash), as_words.clone())]);
+    }
 }
 
 pub fn h256_to_u256(num: H256) -> U256 {
