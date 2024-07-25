@@ -649,7 +649,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
                     key,
                     decommittment_processor
                         .get_preimage_by_hash(normalized_hash)
-                        .expect("Published hash is unknown")
+                        .ok_or_else(|| anyhow::anyhow!("Published hash is unknown"))?
                         .clone(),
                 );
             }
