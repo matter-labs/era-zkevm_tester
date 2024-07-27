@@ -1,7 +1,7 @@
 use crate::default_environment::*;
-use crate::runners::events::SolidityLikeEvent;
-use crate::runners::hashmap_based_memory::SimpleHashmapMemory;
-use crate::runners::simple_witness_tracer::MemoryLogWitnessTracer;
+use crate::events::SolidityLikeEvent;
+use crate::hashmap_based_memory::SimpleHashmapMemory;
+use crate::simple_witness_tracer::MemoryLogWitnessTracer;
 use crate::utils::IntoFixedLengthByteIterator;
 use crate::{Address, H256, U256};
 use std::collections::HashMap;
@@ -16,7 +16,8 @@ use zk_evm::zkevm_opcode_defs::decoding::AllowedPcOrImm;
 use zk_evm::zkevm_opcode_defs::decoding::{EncodingModeProduction, VmEncodingMode};
 use zk_evm::zkevm_opcode_defs::definitions::ret::RET_IMPLICIT_RETURNDATA_PARAMS_REGISTER;
 use zk_evm::zkevm_opcode_defs::system_params::{
-    DEPLOYER_SYSTEM_CONTRACT_ADDRESS, KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
+    DEPLOYER_SYSTEM_CONTRACT_ADDRESS, DEPLOYER_SYSTEM_CONTRACT_ADDRESS_LOW,
+    KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
 };
 use zk_evm::zkevm_opcode_defs::{
     BlobSha256Format, ContractCodeSha256Format, FatPointer, VersionedHashLen32,
@@ -37,7 +38,6 @@ pub struct FullABIParams {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Hash)]
 pub enum VmLaunchOption {
     Default,
-    Constructor,
     ManualCallABI(FullABIParams),
 }
 
@@ -469,17 +469,6 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
 ) -> anyhow::Result<VmSnapshot> {
     let (initial_pc, set_far_call_props, extra_props) = match &vm_launch_option {
         VmLaunchOption::Default => (E::PcOrImm::from_u64_clipped(0u64), true, None),
-        VmLaunchOption::Constructor => (
-            E::PcOrImm::from_u64_clipped(0u64),
-            true,
-            Some(FullABIParams {
-                is_constructor: true,
-                is_system_call: false,
-                r3_value: None,
-                r4_value: None,
-                r5_value: None,
-            }),
-        ),
         VmLaunchOption::ManualCallABI(value) => (
             E::PcOrImm::from_u64_clipped(0u64),
             true,
@@ -494,15 +483,33 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     block_properties.evm_simulator_code_hash = evm_simulator_code_hash;
 
     let calldata_length = calldata.len();
-    use zk_evm::contract_bytecode_to_words;
 
     // fill the calldata
     let aligned_calldata = calldata_to_aligned_data(calldata);
-    let initial_bytecode: Vec<[u8; 32]> = contracts
-        .get(&entry_address)
-        .cloned()
-        .ok_or_else(|| anyhow::anyhow!("Initial bytecode not found"))?;
-    let initial_bytecode_as_memory = contract_bytecode_to_words(&initial_bytecode);
+    let initial_bytecode = {
+        let hash = storage
+            .get(&StorageKey {
+                address: Address::from_low_u64_be(DEPLOYER_SYSTEM_CONTRACT_ADDRESS_LOW.into()),
+                key: U256::from_big_endian(entry_address.as_bytes()),
+            })
+            .ok_or_else(|| anyhow::anyhow!("Entry address code hash not found in the storage"))?;
+
+        // If it's an EVM contract, we should run the EVM simulator
+        if hash.as_bytes()[0] == BlobSha256Format::VERSION_BYTE {
+            known_contracts
+                .get(&evm_simulator_code_hash)
+                .cloned()
+                .ok_or_else(|| {
+                    anyhow::anyhow!("EVM simulator bytecode not found in the known contracts")
+                })?
+        } else {
+            contracts
+                .get(&entry_address)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("Initial bytecode not found"))?
+        }
+    };
+    let initial_bytecode_as_memory = zk_evm::contract_bytecode_to_words(&initial_bytecode);
 
     tools.memory.populate(vec![
         (CALLDATA_PAGE, aligned_calldata),
@@ -571,6 +578,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     let mut tracer = GenericNoopTracer::new();
     for _ in 0..cycles_limit {
         vm.cycle(&mut tracer)?;
+        super::evm_deploy::record_deployed_evm_bytecode(&mut vm);
         cycles_used += 1;
 
         // early return
@@ -603,8 +611,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     let mut deployed_contracts = HashMap::new();
 
     let (_full_history, raw_events, l1_messages) = event_sink.flatten();
-    use crate::runners::events::merge_events;
-    let events = merge_events(raw_events.clone());
+    let events = crate::events::merge_events(raw_events.clone());
 
     let (_history, _per_slot) = storage.clone().flatten_and_net_history();
     // dbg!(history);
@@ -676,7 +683,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
         VmExecutionResult::MostLikelyDidNotFinish(..) => vec![],
     };
 
-    let compiler_tests_events: Vec<crate::runners::events::Event> =
+    let compiler_tests_events: Vec<crate::events::Event> =
         events.iter().cloned().map(|el| el.into()).collect();
 
     let serialized_events = serde_json::to_string_pretty(&compiler_tests_events).unwrap();

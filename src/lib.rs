@@ -10,6 +10,10 @@ use zk_evm::vm_state::*;
 use zk_evm::witness_trace::DummyTracer;
 use zk_evm::zkevm_opcode_defs::ethereum_types::*;
 
+pub mod compiler_tests;
 pub mod default_environment;
-pub mod runners;
+pub mod events;
+pub mod evm_deploy;
+pub mod hashmap_based_memory;
+pub mod simple_witness_tracer;
 pub mod utils;
