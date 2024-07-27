@@ -13,7 +13,7 @@ use zk_evm::testing::storage::InMemoryStorage;
 use zk_evm::vm_state::*;
 use zk_evm::zk_evm_abstractions::precompiles::DefaultPrecompilesProcessor;
 use zk_evm::zkevm_opcode_defs::decoding::AllowedPcOrImm;
-use zk_evm::zkevm_opcode_defs::decoding::{EncodingModeProduction, VmEncodingMode};
+use zk_evm::zkevm_opcode_defs::decoding::VmEncodingMode;
 use zk_evm::zkevm_opcode_defs::definitions::ret::RET_IMPLICIT_RETURNDATA_PARAMS_REGISTER;
 use zk_evm::zkevm_opcode_defs::system_params::{
     DEPLOYER_SYSTEM_CONTRACT_ADDRESS, DEPLOYER_SYSTEM_CONTRACT_ADDRESS_LOW,
@@ -304,13 +304,12 @@ pub fn create_default_testing_tools() -> ExtendedTestingTools<false> {
     }
 }
 
-pub fn create_vm<const B: bool, const N: usize, E: VmEncodingMode<N>>(
+pub fn create_vm<const B: bool>(
     mut tools: ExtendedTestingTools<B>,
     block_properties: BlockProperties,
     context: VmExecutionContext,
     contracts: &HashMap<Address, Vec<[u8; 32]>>,
     known_contracts: HashMap<U256, Vec<[u8; 32]>>,
-    initial_pc: E::PcOrImm,
 ) -> (
     VmState<
         InMemoryStorage,
@@ -319,8 +318,8 @@ pub fn create_vm<const B: bool, const N: usize, E: VmEncodingMode<N>>(
         DefaultPrecompilesProcessor<B>,
         SimpleDecommitter<B>,
         MemoryLogWitnessTracer,
-        N,
-        E,
+        8,
+        zk_evm::zkevm_opcode_defs::decoding::EncodingModeProduction,
     >,
     HashMap<U256, Vec<[u8; 32]>>,
 ) {
@@ -332,7 +331,11 @@ pub fn create_vm<const B: bool, const N: usize, E: VmEncodingMode<N>>(
     let mut reverse_lookup_for_bytecode = HashMap::new();
 
     for (_address, bytecode) in contracts.iter() {
-        let bytecode_hash = bytecode_to_code_hash_for_mode::<N, E>(bytecode).unwrap();
+        let bytecode_hash = bytecode_to_code_hash_for_mode::<
+            8,
+            zk_evm::zkevm_opcode_defs::decoding::EncodingModeProduction,
+        >(bytecode)
+        .unwrap();
         let bytecode_hash_as_u256 = U256::from_big_endian(bytecode_hash.as_slice());
 
         reverse_lookup_for_bytecode.insert(bytecode_hash_as_u256, bytecode.to_owned());
@@ -368,9 +371,9 @@ pub fn create_vm<const B: bool, const N: usize, E: VmEncodingMode<N>>(
         code_address: context.this_address,
         base_memory_page: MemoryPage(INITIAL_BASE_PAGE),
         code_page: MemoryPage(ENTRY_POINT_PAGE),
-        sp: E::PcOrImm::from_u64_clipped(0),
-        pc: initial_pc,
-        exception_handler_location: E::PcOrImm::max(),
+        sp: 0,
+        pc: 0,
+        exception_handler_location: <<zk_evm::zkevm_opcode_defs::decoding::EncodingModeProduction as VmEncodingMode<8>>::PcOrImm as AllowedPcOrImm>::max(),
         ergs_remaining: zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS
             - 0x80000000,
         this_shard_id: 0,
@@ -433,7 +436,7 @@ pub fn run_vm_multi_contracts(
             (address, bytecode)
         })
         .collect();
-    run_vm_multi_contracts_inner::<8, EncodingModeProduction>(
+    run_vm_multi_contracts_inner(
         test_name,
         contracts,
         calldata,
@@ -453,7 +456,7 @@ pub fn run_vm_multi_contracts(
 /// Used for testing the compiler with multiple contracts.
 ///
 #[allow(clippy::too_many_arguments)]
-fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
+fn run_vm_multi_contracts_inner(
     _test_name: String,
     contracts: HashMap<Address, Vec<[u8; 32]>>,
     calldata: &[u8],
@@ -467,13 +470,9 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     default_aa_code_hash: U256,
     evm_simulator_code_hash: U256,
 ) -> anyhow::Result<VmSnapshot> {
-    let (initial_pc, set_far_call_props, extra_props) = match &vm_launch_option {
-        VmLaunchOption::Default => (E::PcOrImm::from_u64_clipped(0u64), true, None),
-        VmLaunchOption::ManualCallABI(value) => (
-            E::PcOrImm::from_u64_clipped(0u64),
-            true,
-            Some(value.clone()),
-        ),
+    let (set_far_call_props, extra_props) = match &vm_launch_option {
+        VmLaunchOption::Default => (true, None),
+        VmLaunchOption::ManualCallABI(value) => (true, Some(value.clone())),
     };
 
     let mut tools = create_default_testing_tools();
@@ -533,13 +532,12 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     });
 
     // fill the rest
-    let (mut vm, reverse_lookup_for_bytecode) = create_vm::<false, N, E>(
+    let (mut vm, reverse_lookup_for_bytecode) = create_vm::<false>(
         tools,
         block_properties,
         context,
         &contracts,
         known_contracts,
-        initial_pc,
     );
 
     if set_far_call_props {
@@ -612,10 +610,6 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
 
     let (_full_history, raw_events, l1_messages) = event_sink.flatten();
     let events = crate::events::merge_events(raw_events.clone());
-
-    let (_history, _per_slot) = storage.clone().flatten_and_net_history();
-    // dbg!(history);
-    // dbg!(per_slot);
 
     let storage = storage.inner;
     let storage = storage.into_iter().next().unwrap();
@@ -720,7 +714,7 @@ fn run_vm_multi_contracts_inner<const N: usize, E: VmEncodingMode<N>>(
     })
 }
 
-pub(crate) fn vm_may_have_ended<const B: bool, const N: usize, E: VmEncodingMode<N>>(
+pub(crate) fn vm_may_have_ended<const B: bool>(
     vm: &VmState<
         InMemoryStorage,
         SimpleHashmapMemory,
@@ -728,8 +722,8 @@ pub(crate) fn vm_may_have_ended<const B: bool, const N: usize, E: VmEncodingMode
         DefaultPrecompilesProcessor<B>,
         SimpleDecommitter<B>,
         MemoryLogWitnessTracer,
-        N,
-        E,
+        8,
+        zk_evm::zkevm_opcode_defs::decoding::EncodingModeProduction,
     >,
 ) -> Option<VmExecutionResult> {
     let execution_has_ended = vm.execution_has_ended();
@@ -737,7 +731,7 @@ pub(crate) fn vm_may_have_ended<const B: bool, const N: usize, E: VmEncodingMode
     let r1 = vm.local_state.registers[RET_IMPLICIT_RETURNDATA_PARAMS_REGISTER as usize];
     let current_address = vm.local_state.callstack.get_current_stack().this_address;
 
-    let outer_eh_location = E::PcOrImm::max().as_u64();
+    let outer_eh_location = <<zk_evm::zkevm_opcode_defs::decoding::EncodingModeProduction as VmEncodingMode<8>>::PcOrImm as AllowedPcOrImm>::max().as_u64();
     match (
         execution_has_ended,
         vm.local_state.callstack.get_current_stack().pc.as_u64(),
