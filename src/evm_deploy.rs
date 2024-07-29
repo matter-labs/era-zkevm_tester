@@ -1,28 +1,40 @@
-use std::collections::HashMap;
-
 use zk_evm::{
     ethereum_types::{Address, H160, H256, U256},
-    reference_impls::{
-        decommitter::SimpleDecommitter, event_sink::InMemoryEventSink, memory::SimpleMemory,
-    },
+    reference_impls::{decommitter::SimpleDecommitter, event_sink::InMemoryEventSink},
     testing::storage::InMemoryStorage,
     vm_state::VmState,
     zk_evm_abstractions::precompiles::DefaultPrecompilesProcessor,
     zkevm_opcode_defs::{
-        decoding::VmEncodingMode,
-        system_params::{
-            DEPLOYER_SYSTEM_CONTRACT_ADDRESS, KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
-        },
-        BlobSha256Format, FatPointer, VersionedHashLen32, CALL_IMPLICIT_CALLDATA_FAT_PTR_REGISTER,
+        decoding::VmEncodingMode, BlobSha256Format, FatPointer, VersionedHashLen32,
+        CALL_IMPLICIT_CALLDATA_FAT_PTR_REGISTER,
     },
 };
 
 use crate::{
-    publish_evm_bytecode_interface,
-    runners::{
-        hashmap_based_memory::SimpleHashmapMemory, simple_witness_tracer::MemoryLogWitnessTracer,
-    },
+    hashmap_based_memory::SimpleHashmapMemory, simple_witness_tracer::MemoryLogWitnessTracer,
 };
+
+pub fn publish_evm_bytecode_interface() -> ethabi::Contract {
+    let known_code_storage_abi = serde_json::json!(
+        [
+            {
+                "inputs": [
+                  {
+                    "internalType": "bytes",
+                    "name": "bytecode",
+                    "type": "bytes"
+                  }
+                ],
+                "name": "publishEVMBytecode",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            }
+        ]
+    );
+
+    serde_json::from_value(known_code_storage_abi).unwrap()
+}
 
 // In zk_evm@1.5.0 the "deployer address" constant is incorrect and it points to the account code storage.
 // so we duplicate those here.
@@ -128,7 +140,7 @@ pub(crate) fn hash_evm_bytecode(bytecode: &[u8]) -> H256 {
     let result = hasher.finalize();
 
     let mut output = [0u8; 32];
-    output[..].copy_from_slice(&result.as_slice());
+    output[..].copy_from_slice(result.as_slice());
     output[0] = BlobSha256Format::VERSION_BYTE;
     output[1] = 0;
     output[2..4].copy_from_slice(&len.to_be_bytes());

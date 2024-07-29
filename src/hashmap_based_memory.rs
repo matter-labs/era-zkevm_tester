@@ -1,7 +1,7 @@
 use crate::U256;
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SimpleHashmapMemory {
     pub inner: HashMap<u32, HashMap<u32, PrimitiveValue>>,
 }
@@ -10,12 +10,6 @@ pub struct SimpleHashmapMemory {
 // otherwise we carry rollbacks to the parent's frames
 
 impl SimpleHashmapMemory {
-    pub fn new() -> Self {
-        Self {
-            inner: HashMap::default(),
-        }
-    }
-
     pub fn populate(&mut self, elements: Vec<(u32, Vec<U256>)>) -> Vec<(u32, usize)> {
         let mut results = vec![];
         for (page, values) in elements.into_iter() {
@@ -63,7 +57,7 @@ impl SimpleHashmapMemory {
         range: std::ops::Range<u32>,
     ) -> Vec<U256> {
         if let Some(page) = self.inner.get(&page_number) {
-            let mut result = Vec::with_capacity(range.len() as usize);
+            let mut result = Vec::with_capacity(range.len());
             for i in range {
                 if let Some(word) = page.get(&i) {
                     result.push(word.value);
@@ -112,7 +106,7 @@ use zk_evm::vm_state::PrimitiveValue;
 
 impl Memory for SimpleHashmapMemory {
     fn read_code_query(&self, _monotonic_cycle_counter: u32, query: MemoryQuery) -> MemoryQuery {
-        assert!(query.rw_flag == false);
+        assert!(!query.rw_flag);
 
         if let Some(existing) = self.inner.get(&query.location.page.0) {
             if let Some(value) = existing.get(&query.location.index.0) {
@@ -142,10 +136,7 @@ impl Memory for SimpleHashmapMemory {
         _monotonic_cycle_counter: u32,
         mut query: MemoryQuery,
     ) -> MemoryQuery {
-        let entry = self
-            .inner
-            .entry(query.location.page.0)
-            .or_insert(HashMap::new());
+        let entry = self.inner.entry(query.location.page.0).or_default();
         let value = entry
             .entry(query.location.index.0)
             .or_insert(PrimitiveValue::empty());
