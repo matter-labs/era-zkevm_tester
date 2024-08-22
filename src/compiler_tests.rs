@@ -274,6 +274,44 @@ pub fn run_vm(
     )
 }
 
+///
+/// Used for testing the compiler with a single contract.
+///
+#[allow(clippy::too_many_arguments)]
+pub fn run_vm_with_transient_storage(
+    test_name: String,
+    bytecode: Vec<u8>,
+    calldata: &[u8],
+    storage: HashMap<StorageKey, H256>,
+    storage_transient: HashMap<StorageKey, H256>,
+    context: Option<VmExecutionContext>,
+    vm_launch_option: VmLaunchOption,
+    cycles_limit: usize,
+    known_contracts: HashMap<U256, Vec<u8>>,
+    known_sha256_blobs: HashMap<U256, Vec<U256>>,
+    default_aa_code_hash: U256,
+    evm_simulator_code_hash: U256,
+) -> anyhow::Result<VmSnapshot> {
+    let entry_address = default_entry_point_contract_address();
+    let mut contracts: HashMap<Address, Vec<u8>> = HashMap::new();
+    contracts.insert(entry_address, bytecode);
+    run_vm_multi_contracts_with_transient_storage(
+        test_name,
+        contracts,
+        calldata,
+        storage,
+        storage_transient,
+        entry_address,
+        context,
+        vm_launch_option,
+        cycles_limit,
+        known_contracts,
+        known_sha256_blobs,
+        default_aa_code_hash,
+        evm_simulator_code_hash,
+    )
+}
+
 pub struct ExtendedTestingTools<const B: bool> {
     pub storage: InMemoryStorage,
     pub memory: SimpleHashmapMemory,
@@ -441,6 +479,63 @@ pub fn run_vm_multi_contracts(
         contracts,
         calldata,
         storage,
+        Default::default(),
+        entry_address,
+        context,
+        vm_launch_option,
+        cycles_limit,
+        known_contracts,
+        known_sha256_blobs,
+        default_aa_code_hash,
+        evm_simulator_code_hash,
+    )
+}
+
+///
+/// Used for testing the compiler with multiple contracts and transient storage.
+///
+#[allow(clippy::too_many_arguments)]
+pub fn run_vm_multi_contracts_with_transient_storage(
+    test_name: String,
+    contracts: HashMap<Address, Vec<u8>>,
+    calldata: &[u8],
+    storage: HashMap<StorageKey, H256>,
+    storage_transient: HashMap<StorageKey, H256>,
+    entry_address: Address,
+    context: Option<VmExecutionContext>,
+    vm_launch_option: VmLaunchOption,
+    cycles_limit: usize,
+    known_contracts: HashMap<U256, Vec<u8>>,
+    known_sha256_blobs: HashMap<U256, Vec<U256>>,
+    default_aa_code_hash: U256,
+    evm_simulator_code_hash: U256,
+) -> anyhow::Result<VmSnapshot> {
+    let contracts = contracts
+        .into_iter()
+        .map(|(address, bytecode)| {
+            let bytecode = bytecode
+                .chunks(32)
+                .map(|word| word.try_into().unwrap())
+                .collect();
+            (address, bytecode)
+        })
+        .collect();
+    let known_contracts = known_contracts
+        .into_iter()
+        .map(|(address, bytecode)| {
+            let bytecode = bytecode
+                .chunks(32)
+                .map(|word| word.try_into().unwrap())
+                .collect();
+            (address, bytecode)
+        })
+        .collect();
+    run_vm_multi_contracts_inner(
+        test_name,
+        contracts,
+        calldata,
+        storage,
+        storage_transient,
         entry_address,
         context,
         vm_launch_option,
@@ -461,6 +556,7 @@ fn run_vm_multi_contracts_inner(
     contracts: HashMap<Address, Vec<[u8; 32]>>,
     calldata: &[u8],
     storage: HashMap<StorageKey, H256>,
+    storage_transient: HashMap<StorageKey, H256>,
     entry_address: Address,
     context: Option<VmExecutionContext>,
     vm_launch_option: VmLaunchOption,
@@ -522,6 +618,12 @@ fn run_vm_multi_contracts_inner(
     // fill the storage. Only rollup shard for now
     for (key, value) in storage.into_iter() {
         let per_address_entry = tools.storage.inner[0].entry(key.address).or_default();
+        per_address_entry.insert(key.key, U256::from_big_endian(value.as_bytes()));
+    }
+
+    // fill the transient storage. Only rollup shard for now
+    for (key, value) in storage_transient.into_iter() {
+        let per_address_entry = tools.storage.inner_transient[0].entry(key.address).or_default();
         per_address_entry.insert(key.key, U256::from_big_endian(value.as_bytes()));
     }
 
