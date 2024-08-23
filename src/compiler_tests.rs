@@ -247,42 +247,6 @@ pub fn run_vm(
     bytecode: Vec<u8>,
     calldata: &[u8],
     storage: HashMap<StorageKey, H256>,
-    context: Option<VmExecutionContext>,
-    vm_launch_option: VmLaunchOption,
-    cycles_limit: usize,
-    known_contracts: HashMap<U256, Vec<u8>>,
-    known_sha256_blobs: HashMap<U256, Vec<U256>>,
-    default_aa_code_hash: U256,
-    evm_simulator_code_hash: U256,
-) -> anyhow::Result<VmSnapshot> {
-    let entry_address = default_entry_point_contract_address();
-    let mut contracts: HashMap<Address, Vec<u8>> = HashMap::new();
-    contracts.insert(entry_address, bytecode);
-    run_vm_multi_contracts(
-        test_name,
-        contracts,
-        calldata,
-        storage,
-        entry_address,
-        context,
-        vm_launch_option,
-        cycles_limit,
-        known_contracts,
-        known_sha256_blobs,
-        default_aa_code_hash,
-        evm_simulator_code_hash,
-    )
-}
-
-///
-/// Used for testing the compiler with a single contract.
-///
-#[allow(clippy::too_many_arguments)]
-pub fn run_vm_with_transient_storage(
-    test_name: String,
-    bytecode: Vec<u8>,
-    calldata: &[u8],
-    storage: HashMap<StorageKey, H256>,
     storage_transient: HashMap<StorageKey, H256>,
     context: Option<VmExecutionContext>,
     vm_launch_option: VmLaunchOption,
@@ -295,7 +259,7 @@ pub fn run_vm_with_transient_storage(
     let entry_address = default_entry_point_contract_address();
     let mut contracts: HashMap<Address, Vec<u8>> = HashMap::new();
     contracts.insert(entry_address, bytecode);
-    run_vm_multi_contracts_with_transient_storage(
+    run_vm_multi_contracts(
         test_name,
         contracts,
         calldata,
@@ -441,61 +405,6 @@ pub fn create_vm<const B: bool>(
 ///
 #[allow(clippy::too_many_arguments)]
 pub fn run_vm_multi_contracts(
-    test_name: String,
-    contracts: HashMap<Address, Vec<u8>>,
-    calldata: &[u8],
-    storage: HashMap<StorageKey, H256>,
-    entry_address: Address,
-    context: Option<VmExecutionContext>,
-    vm_launch_option: VmLaunchOption,
-    cycles_limit: usize,
-    known_contracts: HashMap<U256, Vec<u8>>,
-    known_sha256_blobs: HashMap<U256, Vec<U256>>,
-    default_aa_code_hash: U256,
-    evm_simulator_code_hash: U256,
-) -> anyhow::Result<VmSnapshot> {
-    let contracts = contracts
-        .into_iter()
-        .map(|(address, bytecode)| {
-            let bytecode = bytecode
-                .chunks(32)
-                .map(|word| word.try_into().unwrap())
-                .collect();
-            (address, bytecode)
-        })
-        .collect();
-    let known_contracts = known_contracts
-        .into_iter()
-        .map(|(address, bytecode)| {
-            let bytecode = bytecode
-                .chunks(32)
-                .map(|word| word.try_into().unwrap())
-                .collect();
-            (address, bytecode)
-        })
-        .collect();
-    run_vm_multi_contracts_inner(
-        test_name,
-        contracts,
-        calldata,
-        storage,
-        Default::default(),
-        entry_address,
-        context,
-        vm_launch_option,
-        cycles_limit,
-        known_contracts,
-        known_sha256_blobs,
-        default_aa_code_hash,
-        evm_simulator_code_hash,
-    )
-}
-
-///
-/// Used for testing the compiler with multiple contracts and transient storage.
-///
-#[allow(clippy::too_many_arguments)]
-pub fn run_vm_multi_contracts_with_transient_storage(
     test_name: String,
     contracts: HashMap<Address, Vec<u8>>,
     calldata: &[u8],
