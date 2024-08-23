@@ -623,7 +623,9 @@ fn run_vm_multi_contracts_inner(
 
     // fill the transient storage. Only rollup shard for now
     for (key, value) in storage_transient.into_iter() {
-        let per_address_entry = tools.storage.inner_transient[0].entry(key.address).or_default();
+        let per_address_entry = tools.storage.inner_transient[0]
+            .entry(key.address)
+            .or_default();
         per_address_entry.insert(key.key, U256::from_big_endian(value.as_bytes()));
     }
 
