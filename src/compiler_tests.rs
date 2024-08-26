@@ -247,6 +247,7 @@ pub fn run_vm(
     bytecode: Vec<u8>,
     calldata: &[u8],
     storage: HashMap<StorageKey, H256>,
+    storage_transient: HashMap<StorageKey, H256>,
     context: Option<VmExecutionContext>,
     vm_launch_option: VmLaunchOption,
     cycles_limit: usize,
@@ -263,6 +264,7 @@ pub fn run_vm(
         contracts,
         calldata,
         storage,
+        storage_transient,
         entry_address,
         context,
         vm_launch_option,
@@ -407,6 +409,7 @@ pub fn run_vm_multi_contracts(
     contracts: HashMap<Address, Vec<u8>>,
     calldata: &[u8],
     storage: HashMap<StorageKey, H256>,
+    storage_transient: HashMap<StorageKey, H256>,
     entry_address: Address,
     context: Option<VmExecutionContext>,
     vm_launch_option: VmLaunchOption,
@@ -441,6 +444,7 @@ pub fn run_vm_multi_contracts(
         contracts,
         calldata,
         storage,
+        storage_transient,
         entry_address,
         context,
         vm_launch_option,
@@ -461,6 +465,7 @@ fn run_vm_multi_contracts_inner(
     contracts: HashMap<Address, Vec<[u8; 32]>>,
     calldata: &[u8],
     storage: HashMap<StorageKey, H256>,
+    storage_transient: HashMap<StorageKey, H256>,
     entry_address: Address,
     context: Option<VmExecutionContext>,
     vm_launch_option: VmLaunchOption,
@@ -522,6 +527,14 @@ fn run_vm_multi_contracts_inner(
     // fill the storage. Only rollup shard for now
     for (key, value) in storage.into_iter() {
         let per_address_entry = tools.storage.inner[0].entry(key.address).or_default();
+        per_address_entry.insert(key.key, U256::from_big_endian(value.as_bytes()));
+    }
+
+    // fill the transient storage. Only rollup shard for now
+    for (key, value) in storage_transient.into_iter() {
+        let per_address_entry = tools.storage.inner_transient[0]
+            .entry(key.address)
+            .or_default();
         per_address_entry.insert(key.key, U256::from_big_endian(value.as_bytes()));
     }
 
