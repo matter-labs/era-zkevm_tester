@@ -5,7 +5,7 @@ edition = "2021"
 resolver = "2"
 
 [dependencies]
-zk_evm = { git = "https://github.com/matter-labs/zksync-protocol", version = "=0.150.5" }
+zk_evm = "=0.150.6"
 
 anyhow = "1.0"
 num-bigint = "0.4"
