@@ -5,7 +5,7 @@ edition = "2021"
 resolver = "2"
 
 [dependencies]
-zk_evm = { git = "https://github.com/matter-labs/zksync-protocol", branch = "vv-remove-evm-stipend", package = "zk_evm" }
+zk_evm = { git = "https://github.com/matter-labs/zksync-protocol", branch = "evm-emulator/testing", package = "zk_evm" }
 
 anyhow = "1.0"
 num-bigint = "0.4"
