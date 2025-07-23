@@ -61,7 +61,7 @@ pub fn create_vm_with_default_settings<const B: bool>(
         tools.decommittment_processor,
         tools.witness_tracer,
         block_properties,
-        zk_evm::vm_state::Version::latest()
+        zk_evm::vm_state::Version::latest(),
     );
 
     let bootloader_context = CallStackEntry {

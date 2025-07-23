@@ -365,7 +365,7 @@ pub fn create_vm<const B: bool>(
         tools.decommittment_processor,
         tools.witness_tracer,
         block_properties,
-        zk_evm::vm_state::Version::latest()
+        zk_evm::vm_state::Version::latest(),
     );
 
     let initial_context = CallStackEntry {
