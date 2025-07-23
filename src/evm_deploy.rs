@@ -123,7 +123,7 @@ pub(crate) fn record_deployed_evm_bytecode<const B: bool, const N: usize, E: VmE
     let hash = hash_evm_bytecode(
         unpadded_bytecode_len
             .try_into()
-            .expect("Bytecode length should fit in usize"),
+            .expect("Bytecode length should fit in u16"),
         &bytecode_words,
     );
 
@@ -147,7 +147,7 @@ pub fn h256_to_u256(num: H256) -> U256 {
     U256::from_big_endian(num.as_bytes())
 }
 
-pub(crate) fn hash_evm_bytecode(unpadded_len: usize, bytecode_words: &Vec<[u8; 32]>) -> H256 {
+pub(crate) fn hash_evm_bytecode(unpadded_len: u16, bytecode_words: &Vec<[u8; 32]>) -> H256 {
     use sha2::{Digest, Sha256};
 
     let mut hasher = Sha256::new();
