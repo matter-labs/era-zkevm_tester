@@ -20,6 +20,11 @@ pub fn publish_evm_bytecode_interface() -> ethabi::Contract {
             {
                 "inputs": [
                   {
+                    "internalType": "uint256",
+                    "name": "unpaddedBytecodeLen",
+                    "type": "uint256"
+                  },
+                  {
                     "internalType": "bytes",
                     "name": "bytecode",
                     "type": "bytes"
@@ -111,10 +116,16 @@ pub(crate) fn record_deployed_evm_bytecode<const B: bool, const N: usize, E: VmE
         return;
     };
 
-    let published_bytecode = call_params[0].clone().into_bytes().unwrap();
+    let unpadded_bytecode_len = call_params[0].clone().into_uint().unwrap();
+    let published_bytecode = call_params[1].clone().into_bytes().unwrap();
 
-    let hash = hash_evm_bytecode(&published_bytecode);
-    let as_words = bytes_to_be_words(published_bytecode);
+    let bytecode_words = evm_bytecode_into_words(published_bytecode);
+    let hash = hash_evm_bytecode(
+        unpadded_bytecode_len
+            .try_into()
+            .expect("Bytecode length should fit in u16"),
+        &bytecode_words,
+    );
 
     let (_, normalized) = BlobSha256Format::normalize_for_decommitment(hash.as_fixed_bytes());
     if state
@@ -122,9 +133,13 @@ pub(crate) fn record_deployed_evm_bytecode<const B: bool, const N: usize, E: VmE
         .get_preimage_by_hash(normalized)
         .is_none()
     {
+        let as_words = bytecode_words
+            .into_iter()
+            .map(|x| U256::from_big_endian(x.as_slice()))
+            .collect();
         state
             .decommittment_processor
-            .populate(vec![(h256_to_u256(hash), as_words.clone())]);
+            .populate(vec![(h256_to_u256(hash), as_words)]);
     }
 }
 
@@ -132,26 +147,35 @@ pub fn h256_to_u256(num: H256) -> U256 {
     U256::from_big_endian(num.as_bytes())
 }
 
-pub(crate) fn hash_evm_bytecode(bytecode: &[u8]) -> H256 {
+pub(crate) fn hash_evm_bytecode(unpadded_len: u16, bytecode_words: &Vec<[u8; 32]>) -> H256 {
     use sha2::{Digest, Sha256};
+
     let mut hasher = Sha256::new();
-    let len = bytecode.len() as u16;
-    hasher.update(bytecode);
+    for w in bytecode_words.iter() {
+        hasher.update(&w);
+    }
+
     let result = hasher.finalize();
 
     let mut output = [0u8; 32];
     output[..].copy_from_slice(result.as_slice());
     output[0] = BlobSha256Format::VERSION_BYTE;
     output[1] = 0;
-    output[2..4].copy_from_slice(&len.to_be_bytes());
+    output[2..4].copy_from_slice(&unpadded_len.to_be_bytes());
 
     H256(output)
 }
 
-fn bytes_to_be_words(vec: Vec<u8>) -> Vec<U256> {
-    assert!(vec.len() % 32 == 0, "Invalid bytecode length");
+pub fn evm_bytecode_into_words(bytecode: Vec<u8>) -> Vec<[u8; 32]> {
+    let mut result = Vec::new();
 
-    vec.chunks(32).map(U256::from_big_endian).collect()
+    for chunk in bytecode.chunks(32) {
+        let mut arr = [0u8; 32];
+        arr[..chunk.len()].copy_from_slice(chunk);
+        result.push(arr);
+    }
+
+    result
 }
 
 /// Reads the memory slice represented by the fat pointer.
