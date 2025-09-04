@@ -365,6 +365,7 @@ pub fn create_vm<const B: bool>(
         tools.decommittment_processor,
         tools.witness_tracer,
         block_properties,
+        zk_evm::vm_state::Version::latest(),
     );
 
     let initial_context = CallStackEntry {
@@ -484,7 +485,7 @@ fn run_vm_multi_contracts_inner(
     let mut block_properties = create_default_block_properties();
     block_properties.default_aa_code_hash = default_aa_code_hash;
     // we can always pretend it to be empty account
-    block_properties.evm_simulator_code_hash = evm_simulator_code_hash;
+    block_properties.evm_emulator_code_hash = evm_simulator_code_hash;
 
     let calldata_length = calldata.len();
 

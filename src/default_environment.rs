@@ -38,7 +38,7 @@ pub fn create_default_block_properties() -> BlockProperties {
     BlockProperties {
         default_aa_code_hash: U256::zero(),
         zkporter_is_available: true,
-        evm_simulator_code_hash: U256::zero(),
+        evm_emulator_code_hash: U256::zero(),
     }
 }
 
@@ -61,6 +61,7 @@ pub fn create_vm_with_default_settings<const B: bool>(
         tools.decommittment_processor,
         tools.witness_tracer,
         block_properties,
+        zk_evm::vm_state::Version::latest(),
     );
 
     let bootloader_context = CallStackEntry {

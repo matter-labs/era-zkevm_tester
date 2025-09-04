@@ -1,11 +1,11 @@
 [package]
 name = "zkevm_tester"
-version = "1.5.0"
+version = "1.5.2"
 edition = "2021"
 resolver = "2"
 
 [dependencies]
-zkevm_opcode_defs = { git = "https://github.com/matter-labs/zksync-protocol", branch = "main" }
+zk_evm = { git = "https://github.com/matter-labs/zksync-protocol", branch = "main", package = "zk_evm" }
 
 anyhow = "1.0"
 num-bigint = "0.4"
